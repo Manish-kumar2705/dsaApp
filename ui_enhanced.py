@@ -271,7 +271,7 @@ def show_dashboard(system):
     
     # Compact today's problem
     st.subheader("🎯 Today's Problem")
-    today_problem = system.get_today_problem()
+    pattern, today_problem = system.get_today_problem()
     if today_problem:
         status = str(today_problem.get("status", "")).lower()
         if status != "completed":
@@ -319,8 +319,8 @@ def show_solve_interface(system):
     st.session_state.selected_pattern = selected_pattern
     
     # Compact today's problem
-    today_problem = system.get_today_problem()
-    if today_problem and today_problem.get("pattern") == selected_pattern:
+    pattern, today_problem = system.get_today_problem()
+    if today_problem and isinstance(today_problem, dict) and today_problem.get("pattern") == selected_pattern:
         st.subheader(f"🎯 {today_problem['id']} - {today_problem['title']}")
         st.markdown(f"**{today_problem['difficulty']}** • {today_problem['pattern']}")
         
@@ -341,7 +341,7 @@ def show_solve_interface(system):
             if st.button("🤖 Analyze", key="analyze_code", use_container_width=True):
                 if user_code.strip():
                     with st.spinner("Analyzing..."):
-                        analysis = system.analyze_code(today_problem, user_code)
+                        analysis = system.analyze_solution(today_problem, user_code)
                         st.session_state.analysis = analysis
                         st.session_state.code_explanation = generate_code_explanation(today_problem, user_code, "python")
                 else:
@@ -365,7 +365,8 @@ def show_solve_interface(system):
         
         # Compact note generation
         if st.session_state.analysis:
-            note_md = system.generate_dsa_note(today_problem, st.session_state.analysis, user_code)
+            note_md, flashcards = system.generate_dsa_note(today_problem, user_code)
+            st.session_state[f"flashcards_{today_problem['id']}"] = flashcards
             st.session_state[f"note_md_{today_problem['id']}"] = note_md
             
             with st.expander("📝 Generated Note", expanded=False):
