@@ -327,87 +327,113 @@ def show_learning_motivation(system):
     """Show learning motivation and achievements"""
     st.markdown("### 🏆 Learning Motivation")
     
-    # Calculate streak and achievements
-    completed_problems = [p for p in system.get_all_problems() if str(p.get("status", "")).lower() == "completed"]
-    total_completed = len(completed_problems)
-    
-    # Daily streak calculation
-    today = datetime.now().date()
-    recent_completions = []
-    for problem in completed_problems:
-        if hasattr(problem, 'completed_date'):
-            completion_date = datetime.strptime(problem['completed_date'], '%Y-%m-%d').date()
-            if (today - completion_date).days <= 7:
+    try:
+        # Calculate streak and achievements
+        all_problems = system.get_all_problems()
+        completed_problems = [p for p in all_problems if str(p.get("status", "")).lower() == "completed"]
+        total_completed = len(completed_problems)
+        
+        # Daily streak calculation
+        today = datetime.now().date()
+        recent_completions = []
+        for problem in completed_problems:
+            # Handle different possible date formats and structures
+            completion_date = None
+            if isinstance(problem, dict):
+                if 'completed_date' in problem:
+                    try:
+                        completion_date = datetime.strptime(problem['completed_date'], '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        continue
+                elif hasattr(problem, 'completed_date'):
+                    try:
+                        completion_date = datetime.strptime(problem.completed_date, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        continue
+            
+            if completion_date and (today - completion_date).days <= 7:
                 recent_completions.append(completion_date)
-    
-    streak = 0
-    current_date = today
-    while current_date in recent_completions:
-        streak += 1
-        current_date -= timedelta(days=1)
-    
-    # Display motivation metrics
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric("🔥 Daily Streak", f"{streak} days")
-        if streak >= 7:
-            st.success("🎉 Week streak achieved!")
-        elif streak >= 3:
-            st.info("💪 Keep going!")
-    
-    with col2:
-        st.metric("✅ Problems Solved", total_completed)
+        
+        streak = 0
+        current_date = today
+        while current_date in recent_completions:
+            streak += 1
+            current_date -= timedelta(days=1)
+        
+        # Display motivation metrics
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("🔥 Daily Streak", f"{streak} days")
+            if streak >= 7:
+                st.success("🎉 Week streak achieved!")
+            elif streak >= 3:
+                st.info("💪 Keep going!")
+        
+        with col2:
+            st.metric("✅ Problems Solved", total_completed)
+            if total_completed >= 50:
+                st.success("🏆 50 problems milestone!")
+            elif total_completed >= 25:
+                st.info("🎯 Halfway to 50!")
+        
+        with col3:
+            # Safely extract patterns
+            patterns = set()
+            for p in completed_problems:
+                if isinstance(p, dict) and 'pattern' in p:
+                    patterns.add(p['pattern'])
+                elif hasattr(p, 'pattern'):
+                    patterns.add(p.pattern)
+            
+            patterns_mastered = len(patterns)
+            st.metric("📚 Patterns Mastered", patterns_mastered)
+            if patterns_mastered >= 5:
+                st.success("🌟 Pattern master!")
+            elif patterns_mastered >= 3:
+                st.info("📖 Learning well!")
+        
+        # Achievement badges
+        st.markdown("#### 🏅 Achievements")
+        achievements = []
+        
+        if total_completed >= 10:
+            achievements.append("🥉 Bronze Solver (10 problems)")
+        if total_completed >= 25:
+            achievements.append("🥈 Silver Solver (25 problems)")
         if total_completed >= 50:
-            st.success("🏆 50 problems milestone!")
-        elif total_completed >= 25:
-            st.info("🎯 Halfway to 50!")
-    
-    with col3:
-        patterns_mastered = len(set(p['pattern'] for p in completed_problems))
-        st.metric("📚 Patterns Mastered", patterns_mastered)
+            achievements.append("🥇 Gold Solver (50 problems)")
+        if total_completed >= 100:
+            achievements.append("💎 Diamond Solver (100 problems)")
+        
+        if streak >= 3:
+            achievements.append("🔥 3-Day Streak")
+        if streak >= 7:
+            achievements.append("🔥 7-Day Streak")
+        if streak >= 30:
+            achievements.append("🔥 30-Day Streak")
+        
+        if patterns_mastered >= 3:
+            achievements.append("📚 Pattern Learner")
         if patterns_mastered >= 5:
-            st.success("🌟 Pattern master!")
-        elif patterns_mastered >= 3:
-            st.info("📖 Learning well!")
+            achievements.append("📚 Pattern Master")
+        
+        # Display achievements
+        if achievements:
+            for achievement in achievements:
+                st.success(f"✅ {achievement}")
+        else:
+            st.info("🎯 Start solving problems to earn achievements!")
+        
+        # Study reminder
+        if streak == 0:
+            st.warning("💡 Don't break your streak! Solve a problem today!")
+        elif streak >= 1:
+            st.success(f"🔥 Amazing! {streak}-day streak! Keep it up!")
     
-    # Achievement badges
-    st.markdown("#### 🏅 Achievements")
-    achievements = []
-    
-    if total_completed >= 10:
-        achievements.append("🥉 Bronze Solver (10 problems)")
-    if total_completed >= 25:
-        achievements.append("🥈 Silver Solver (25 problems)")
-    if total_completed >= 50:
-        achievements.append("🥇 Gold Solver (50 problems)")
-    if total_completed >= 100:
-        achievements.append("💎 Diamond Solver (100 problems)")
-    
-    if streak >= 3:
-        achievements.append("🔥 3-Day Streak")
-    if streak >= 7:
-        achievements.append("🔥 7-Day Streak")
-    if streak >= 30:
-        achievements.append("🔥 30-Day Streak")
-    
-    if patterns_mastered >= 3:
-        achievements.append("📚 Pattern Learner")
-    if patterns_mastered >= 5:
-        achievements.append("📚 Pattern Master")
-    
-    # Display achievements
-    if achievements:
-        for achievement in achievements:
-            st.success(f"✅ {achievement}")
-    else:
-        st.info("🎯 Start solving problems to earn achievements!")
-    
-    # Study reminder
-    if streak == 0:
-        st.warning("💡 Don't break your streak! Solve a problem today!")
-    elif streak >= 1:
-        st.success(f"🔥 Amazing! {streak}-day streak! Keep it up!")
+    except Exception as e:
+        st.error(f"Error loading learning motivation: {str(e)}")
+        st.info("🎯 Start solving problems to see your progress!")
 
 # Add daily learning tip
 def show_daily_learning_tip():
@@ -1017,6 +1043,21 @@ def show_study_mode(system):
 
 # Update main function to use mobile navigation
 def main():
+    # Initialize session state first
+    if 'page' not in st.session_state:
+        st.session_state.page = "dashboard"
+    if 'current_problem' not in st.session_state:
+        st.session_state.current_problem = None
+    if 'user_code' not in st.session_state:
+        st.session_state.user_code = ""
+    if 'analysis' not in st.session_state:
+        st.session_state.analysis = None
+    if 'code_explanation' not in st.session_state:
+        st.session_state.code_explanation = None
+    if 'selected_pattern' not in st.session_state:
+        # We'll initialize this after getting the system
+        st.session_state.selected_pattern = None
+
     # Initialize system
     system = get_system()
     
@@ -1027,16 +1068,8 @@ def main():
     if not os.environ.get('STREAMLIT_SERVER_HEADLESS', False):
         setup_auto_sync()
     
-    # Initialize session state
-    if 'current_problem' not in st.session_state:
-        st.session_state.current_problem = None
-    if 'user_code' not in st.session_state:
-        st.session_state.user_code = ""
-    if 'analysis' not in st.session_state:
-        st.session_state.analysis = None
-    if 'code_explanation' not in st.session_state:
-        st.session_state.code_explanation = None
-    if 'selected_pattern' not in st.session_state:
+    # Initialize selected_pattern after system is loaded
+    if st.session_state.selected_pattern is None:
         all_patterns = system.get_learning_order_patterns()
         st.session_state.selected_pattern = all_patterns[0] if all_patterns else None
 
@@ -1054,8 +1087,6 @@ def main():
         show_review_interface(system)
     elif st.session_state.page == "study":
         show_study_mode(system)
-    if 'page' not in st.session_state:
-        st.session_state.page = "dashboard"
 
 def show_cloud_status():
     """Show cloud deployment status and instructions"""

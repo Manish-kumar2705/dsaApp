@@ -53,6 +53,10 @@ class DSAMasterySystem:
         Path(OBSIDIAN_VAULT, "Patterns").mkdir(exist_ok=True)
         Path(OBSIDIAN_VAULT, "Problems").mkdir(exist_ok=True)
     
+    def get_all_problems(self):
+        """Get all problems"""
+        return self.neetcode
+    
     def get_unsolved_problems(self, difficulty=None):
         """Get all unsolved problems with optional difficulty filter"""
         return [p for p in self.neetcode 
