@@ -160,7 +160,44 @@ def main():
     elif st.session_state.page == "study":
         show_study_mode(system)
 
+def show_cloud_status():
+    """Show cloud deployment status and instructions"""
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🌐 Cloud Deployment")
+    
+    # Check if running on Streamlit Cloud
+    import os
+    is_cloud = os.environ.get('STREAMLIT_SERVER_HEADLESS', False)
+    
+    if is_cloud:
+        st.sidebar.success("✅ Running on Cloud")
+        st.sidebar.info("""
+        **Cloud Features:**
+        - 📱 Mobile access
+        - 🤖 AI chat
+        - 📝 Note generation
+        - 📊 Progress tracking
+        
+        **Export Options:**
+        - 📥 Download notes
+        - 📊 Export flashcards
+        - 📋 Copy to clipboard
+        """)
+    else:
+        st.sidebar.info("💻 Running Locally")
+        st.sidebar.info("""
+        **Local Features:**
+        - 📁 Direct Obsidian save
+        - 🃏 Direct Anki export
+        - 📚 NotebookLM export
+        """)
+    
+    st.sidebar.markdown("---")
+
 def show_dashboard(system):
+    # Show cloud status at the top
+    show_cloud_status()
+    
     st.markdown("""
     <div class="main-header">
         <h1>🎯 DSA Mastery Dashboard</h1>
@@ -374,9 +411,16 @@ def show_solve_interface(system):
             - Provide a general Java code template for this pattern (if applicable), in a code block.
             Respond in markdown, with the code template in a separate section at the end.
             """
-            from ai_client import call_ai_api
-            st.session_state.pattern_intro = call_ai_api(prompt)
-            st.session_state.pattern_intro_pattern = selected_pattern
+            try:
+                pattern_intro = call_ai_api(prompt)
+                if pattern_intro and pattern_intro.strip():
+                    st.session_state.pattern_intro = pattern_intro
+                else:
+                    st.session_state.pattern_intro = f"## {selected_pattern}\n\nThis is a fundamental pattern in Data Structures and Algorithms. Practice problems in this pattern to master the concept."
+                st.session_state.pattern_intro_pattern = selected_pattern
+            except Exception as e:
+                st.session_state.pattern_intro = f"## {selected_pattern}\n\nThis is a fundamental pattern in Data Structures and Algorithms. Practice problems in this pattern to master the concept.\n\n*Note: AI introduction failed due to: {e}*"
+                st.session_state.pattern_intro_pattern = selected_pattern
     st.markdown(f"#### About {selected_pattern}", unsafe_allow_html=True)
     with st.expander("Show Pattern Overview & Template", expanded=False):
         st.markdown(st.session_state.pattern_intro)
@@ -485,9 +529,12 @@ def show_solve_interface(system):
                         try:
                             chat_prompt = f"You are a DSA tutor. The user is reviewing the following problem and note:\n\n{note_md}\n\nUser's code (if any):\n{user_code}\n\nUser's question: {user_query}\n\nFirst, review the user's code (if provided), suggest corrections and improvements, and then answer the question in detail, referencing the note/code if relevant."
                             ai_response = call_ai_api(chat_prompt)
-                            st.session_state[f"chat_resp_{today_problem['id']}"] = ai_response
+                            if ai_response and ai_response.strip():
+                                st.session_state[f"chat_resp_{today_problem['id']}"] = ai_response
+                            else:
+                                st.session_state[f"chat_resp_{today_problem['id']}"] = "AI response was empty. Please try again or check your API key."
                         except Exception as e:
-                            st.session_state[f"chat_resp_{today_problem['id']}"] = f"AI error: {e}"
+                            st.session_state[f"chat_resp_{today_problem['id']}"] = f"AI error: {e}. Please check your API key and try again."
                 else:
                     st.session_state[f"chat_resp_{today_problem['id']}"] = "Please enter a question."
             chat_resp = st.session_state.get(f"chat_resp_{today_problem['id']}")
@@ -544,14 +591,24 @@ def show_solve_interface(system):
         with col_notes:
             if status == "completed":
                 if st.button("Notes", key=f"notes_{p['id']}"):
-                    note_path = f"{OBSIDIAN_VAULT}/Problems/{p['id']} - {p['title']}.md"
-                    if os.path.exists(note_path):
-                        with open(note_path, "r", encoding="utf-8") as f:
-                            note_md = f.read()
+                    # First try to get note from session state (for cloud deployment)
+                    note_md = st.session_state.get(f"note_md_{p['id']}")
+                    if note_md:
                         with st.modal(f"Note for {p['id']} - {p['title']}"):
                             st.markdown(note_md, unsafe_allow_html=True)
                     else:
-                        st.warning("No solution/note has been generated yet for this problem. Solve the problem to generate a note.")
+                        # Try to read from local file (for local deployment)
+                        try:
+                            note_path = f"{OBSIDIAN_VAULT}/Problems/{p['id']} - {p['title']}.md"
+                            if os.path.exists(note_path):
+                                with open(note_path, "r", encoding="utf-8") as f:
+                                    note_md = f.read()
+                                with st.modal(f"Note for {p['id']} - {p['title']}"):
+                                    st.markdown(note_md, unsafe_allow_html=True)
+                            else:
+                                st.warning("No solution/note has been generated yet for this problem. Solve the problem to generate a note.")
+                        except Exception as e:
+                            st.warning(f"Could not load note: {e}. Try solving the problem again to generate a new note.")
         st.markdown("<hr style='margin:0.1rem 0;' />", unsafe_allow_html=True)
 
     with col2:
@@ -648,6 +705,53 @@ def show_solve_interface(system):
             # Display code explanation
             if st.session_state.code_explanation:
                 display_code_explanation(st.session_state.code_explanation)
+
+    st.markdown("#### Cloud Export Options")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("📥 Download Note", key=f"download_note_{today_problem['id']}"):
+            try:
+                note_md = st.session_state.get(f"note_md_{today_problem['id']}")
+                if note_md:
+                    # Create downloadable file
+                    import base64
+                    b64 = base64.b64encode(note_md.encode()).decode()
+                    href = f'<a href="data:file/md;base64,{b64}" download="{today_problem["title"].replace(" ", "_")}.md">📥 Download Note</a>'
+                    st.markdown(href, unsafe_allow_html=True)
+                    st.success("✅ Note ready for download!")
+                else:
+                    st.error("No note to download. Save the note first.")
+            except Exception as e:
+                st.error(f"Download failed: {e}")
+    with col2:
+        if st.button("📊 Export Flashcards CSV", key=f"export_csv_{today_problem['id']}"):
+            try:
+                flashcards = st.session_state.get(f"flashcards_{today_problem['id']}", [])
+                if flashcards:
+                    import pandas as pd
+                    import io
+                    # Convert flashcards to CSV
+                    df = pd.DataFrame(flashcards)
+                    csv = df.to_csv(index=False)
+                    b64 = base64.b64encode(csv.encode()).decode()
+                    href = f'<a href="data:file/csv;base64,{b64}" download="{today_problem["title"].replace(" ", "_")}_flashcards.csv">📊 Download CSV</a>'
+                    st.markdown(href, unsafe_allow_html=True)
+                    st.success(f"✅ {len(flashcards)} flashcards ready for download!")
+                else:
+                    st.error("No flashcards to export. Generate them first.")
+            except Exception as e:
+                st.error(f"CSV export failed: {e}")
+    with col3:
+        if st.button("📋 Copy to Clipboard", key=f"copy_note_{today_problem['id']}"):
+            try:
+                note_md = st.session_state.get(f"note_md_{today_problem['id']}")
+                if note_md:
+                    st.text_area("Copy this note:", note_md, height=200, key=f"copy_area_{today_problem['id']}")
+                    st.success("✅ Note copied! Paste it into Obsidian or any note app.")
+                else:
+                    st.error("No note to copy. Save the note first.")
+            except Exception as e:
+                st.error(f"Copy failed: {e}")
 
 def display_analysis_results(analysis, language):
     """Display AI analysis results in a nice format"""
