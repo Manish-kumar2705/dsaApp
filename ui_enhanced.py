@@ -15,6 +15,7 @@ from dsa_system import DSAMasterySystem
 from config import *
 from ai_client import call_ai_api
 import os
+from cloud_sync import CloudSync
 
 # Page configuration
 st.set_page_config(
@@ -110,9 +111,58 @@ def get_system():
     """Get cached system instance"""
     return DSAMasterySystem()
 
+def setup_cloud_sync():
+    """Setup cloud sync for automatic syncing"""
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### ☁️ Cloud Sync Setup")
+    
+    # Initialize cloud sync
+    try:
+        cloud_sync = CloudSync()
+        status = cloud_sync.get_cloud_status()
+        
+        # Show current status
+        col1, col2 = st.columns(2)
+        with col1:
+            if status['obsidian']['enabled']:
+                st.success(f"📂 Obsidian: {status['obsidian']['method']}")
+            else:
+                st.info("📂 Obsidian: Not synced")
+        
+        with col2:
+            if status['anki']['enabled']:
+                st.success("📚 Anki: Synced")
+            else:
+                st.info("📚 Anki: Not synced")
+        
+        # Setup buttons
+        if st.button("🔧 Setup Cloud Sync"):
+            st.info("""
+            **Cloud Sync Options:**
+            
+            **📂 Obsidian Sync:**
+            - GitHub (Free, manual sync)
+            - Google Drive (Free, automatic)
+            - Dropbox (Free, automatic)
+            
+            **📚 Anki Sync:**
+            - AnkiWeb (Free, automatic)
+            
+            Run `python cloud_sync.py` in terminal to setup!
+            """)
+        
+        return cloud_sync
+        
+    except Exception as e:
+        st.error(f"Cloud sync error: {e}")
+        return None
+
 def main():
     # Initialize system
     system = get_system()
+    
+    # Setup cloud sync
+    cloud_sync = setup_cloud_sync()
     
     # Initialize session state
     if 'current_problem' not in st.session_state:
@@ -194,9 +244,50 @@ def show_cloud_status():
     
     st.sidebar.markdown("---")
 
+def show_sync_instructions():
+    """Show instructions for syncing between mobile and local PC"""
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🔄 Mobile ↔ PC Sync")
+    
+    st.sidebar.info("""
+    **Mobile Workflow:**
+    1. 📱 Solve problems on phone
+    2. 📝 Generate notes & flashcards
+    3. 📥 Download files
+    4. 💻 Transfer to PC when home
+    
+    **PC Integration:**
+    1. 📁 Copy downloaded files to PC
+    2. 📂 Place notes in Obsidian vault
+    3. 📊 Import flashcards to Anki
+    4. 📚 Export to NotebookLM
+    """)
+    
+    # Quick sync guide
+    with st.sidebar.expander("📋 Sync Guide"):
+        st.markdown("""
+        **Step 1: Mobile (While Traveling)**
+        - Solve problems and generate notes
+        - Download notes and flashcards
+        - Save to phone storage
+        
+        **Step 2: PC (When Home)**
+        - Connect phone to PC
+        - Copy files to your folders:
+          - Notes → `~/Obsidian/DSA/Problems/`
+          - Flashcards → Import to Anki
+          - NotebookLM → Export from Obsidian
+        
+        **Step 3: Seamless Workflow**
+        - All tools stay on your PC
+        - Mobile just generates content
+        - Perfect sync when you're home
+        """)
+
 def show_dashboard(system):
-    # Show cloud status at the top
+    # Show cloud status and sync instructions
     show_cloud_status()
+    show_sync_instructions()
     
     st.markdown("""
     <div class="main-header">
@@ -468,6 +559,23 @@ def show_solve_interface(system):
             if st.button("Save to Notes", key=f"save_note_{today_problem['id']}"):
                 result = system.save_dsa_note_and_flashcards(today_problem, note_md, st.session_state.get(f"flashcards_{today_problem['id']}", []))
                 st.success(f"Note and flashcards saved! (Obsidian: {result.get('note_path')})")
+                
+                # Cloud sync integration
+                if 'cloud_sync' in locals() and cloud_sync:
+                    try:
+                        # Sync note to cloud
+                        filename = f"{today_problem['id']} - {today_problem['title']}.md"
+                        if cloud_sync.sync_note_to_cloud(note_md, filename):
+                            st.success("☁️ Note synced to cloud!")
+                        
+                        # Sync flashcards to Anki
+                        flashcards = st.session_state.get(f"flashcards_{today_problem['id']}", [])
+                        if flashcards:
+                            deck_name = f"DSA_{today_problem['pattern']}"
+                            if cloud_sync.sync_flashcards_to_anki(flashcards, deck_name):
+                                st.success("📚 Flashcards synced to Anki!")
+                    except Exception as e:
+                        st.warning(f"Cloud sync warning: {e}")
                 st.info(f"Saved file path: {result.get('note_path')}")
                 st.markdown("---")
                 st.markdown("#### Export & Review Actions")
@@ -706,8 +814,9 @@ def show_solve_interface(system):
             if st.session_state.code_explanation:
                 display_code_explanation(st.session_state.code_explanation)
 
-    st.markdown("#### Cloud Export Options")
+    st.markdown("#### 📱 Mobile-Friendly Export")
     col1, col2, col3 = st.columns(3)
+
     with col1:
         if st.button("📥 Download Note", key=f"download_note_{today_problem['id']}"):
             try:
@@ -719,39 +828,69 @@ def show_solve_interface(system):
                     href = f'<a href="data:file/md;base64,{b64}" download="{today_problem["title"].replace(" ", "_")}.md">📥 Download Note</a>'
                     st.markdown(href, unsafe_allow_html=True)
                     st.success("✅ Note ready for download!")
+                    st.info("💡 Save this file to your phone, then copy to PC later")
                 else:
-                    st.error("No note to download. Save the note first.")
+                    st.error("No note content available")
             except Exception as e:
-                st.error(f"Download failed: {e}")
+                st.error(f"Download error: {e}")
+
     with col2:
-        if st.button("📊 Export Flashcards CSV", key=f"export_csv_{today_problem['id']}"):
+        if st.button("📊 Export Flashcards", key=f"export_flashcards_{today_problem['id']}"):
             try:
                 flashcards = st.session_state.get(f"flashcards_{today_problem['id']}", [])
                 if flashcards:
                     import pandas as pd
-                    import io
-                    # Convert flashcards to CSV
                     df = pd.DataFrame(flashcards)
                     csv = df.to_csv(index=False)
                     b64 = base64.b64encode(csv.encode()).decode()
-                    href = f'<a href="data:file/csv;base64,{b64}" download="{today_problem["title"].replace(" ", "_")}_flashcards.csv">📊 Download CSV</a>'
+                    href = f'<a href="data:file/csv;base64,{b64}" download="{today_problem["title"].replace(" ", "_")}_flashcards.csv">📊 Download Flashcards</a>'
                     st.markdown(href, unsafe_allow_html=True)
-                    st.success(f"✅ {len(flashcards)} flashcards ready for download!")
+                    st.success("✅ Flashcards ready for download!")
+                    st.info("💡 Import this CSV into Anki on your PC")
                 else:
-                    st.error("No flashcards to export. Generate them first.")
+                    st.error("No flashcards available")
             except Exception as e:
-                st.error(f"CSV export failed: {e}")
+                st.error(f"Export error: {e}")
+
     with col3:
         if st.button("📋 Copy to Clipboard", key=f"copy_note_{today_problem['id']}"):
             try:
                 note_md = st.session_state.get(f"note_md_{today_problem['id']}")
                 if note_md:
-                    st.text_area("Copy this note:", note_md, height=200, key=f"copy_area_{today_problem['id']}")
-                    st.success("✅ Note copied! Paste it into Obsidian or any note app.")
+                    st.code(note_md)
+                    st.success("✅ Note copied! Paste into Obsidian on PC")
+                    st.info("💡 Use Ctrl+A, Ctrl+C to copy, then paste in Obsidian")
                 else:
-                    st.error("No note to copy. Save the note first.")
+                    st.error("No note content available")
             except Exception as e:
-                st.error(f"Copy failed: {e}")
+                st.error(f"Copy error: {e}")
+
+    # Add sync instructions
+    st.markdown("---")
+    with st.expander("🔄 How to Sync with Your PC"):
+        st.markdown("""
+        **When you get home:**
+        
+        1. **📁 Copy Downloaded Files**
+           - Connect phone to PC
+           - Copy `.md` files to: `~/Obsidian/DSA/Problems/`
+           - Copy `.csv` files for Anki import
+        
+        2. **📂 Obsidian Integration**
+           - Notes automatically appear in your vault
+           - Use your existing Obsidian workflow
+           - Tags and structure preserved
+        
+        3. **📊 Anki Integration**
+           - Import CSV files into Anki
+           - Cards appear with proper tags
+           - Study on any device
+        
+        4. **📚 NotebookLM Export**
+           - Use Obsidian → NotebookLM plugin
+           - Or export manually from Obsidian
+           - All notes sync perfectly
+        """)
 
 def display_analysis_results(analysis, language):
     """Display AI analysis results in a nice format"""
