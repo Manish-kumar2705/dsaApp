@@ -1,0 +1,44 @@
+{
+  "problems": {
+    "NC3": {
+      "solved": true,
+      "date": "2025-07-20T17:39:52.636226",
+      "pattern": "Hash Map",
+      "difficulty": "Medium",
+      "note_path": "~\\Documents\\Obsidian\\DSA\\Problems\\NC3 - Two Sum.md",
+      "analysis": {
+        "correct": true,
+        "approach_summary": "Solution saved",
+        "complexity": "Analysis pending"
+      }
+    },
+    "NC78": {
+      "solved": true,
+      "date": "2025-07-20T17:52:21.006531",
+      "pattern": "Backtracking",
+      "difficulty": "Medium",
+      "note_path": "~\\Documents\\Obsidian\\DSA\\Problems\\NC78 - Letter Combinations of a Phone Number.md",
+      "analysis": {
+        "correct": true,
+        "approach_summary": "Solution saved",
+        "complexity": "Analysis pending"
+      }
+    }
+  },
+  "patterns": {
+    "Hash Map": {
+      "solved": 1,
+      "attempted": 1
+    },
+    "Backtracking": {
+      "solved": 1,
+      "attempted": 1
+    }
+  },
+  "stats": {
+    "solved": 2,
+    "total": 150,
+    "streak": 2,
+    "last_run": "2025-07-20T17:52:21.006531"
+  }
+}
