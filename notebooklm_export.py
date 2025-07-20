@@ -1,35 +1,198 @@
 import os
 import shutil
+from pathlib import Path
+from datetime import datetime
 from config import OBSIDIAN_VAULT
 
 def export_for_notebooklm():
-    """Prepare notes for NotebookLM import"""
-    export_dir = "notebooklm_export"
-    os.makedirs(export_dir, exist_ok=True)
+    """Export all DSA notes to NotebookLM format with enhanced structure"""
     
-    # Copy pattern primers
-    patterns_src = os.path.join(OBSIDIAN_VAULT, "Patterns")
-    patterns_dest = os.path.join(export_dir, "Patterns")
-    if os.path.exists(patterns_src):
-        shutil.copytree(patterns_src, patterns_dest, dirs_exist_ok=True)
+    # Create NotebookLM export directory
+    export_dir = Path("notebooklm_export")
+    export_dir.mkdir(exist_ok=True)
     
-    # Copy problem notes
-    problems_src = os.path.join(OBSIDIAN_VAULT, "Problems")
-    problems_dest = os.path.join(export_dir, "Problems")
-    if os.path.exists(problems_src):
-        shutil.copytree(problems_src, problems_dest, dirs_exist_ok=True)
+    # Clear existing exports
+    for file in export_dir.glob("*.md"):
+        file.unlink()
+    
+    # Get all problem notes from Obsidian vault
+    problems_dir = Path(OBSIDIAN_VAULT) / "Problems"
+    if not problems_dir.exists():
+        print(f"❌ Problems directory not found: {problems_dir}")
+        return False
+    
+    exported_count = 0
+    
+    for note_file in problems_dir.glob("*.md"):
+        try:
+            # Read the original note
+            with open(note_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Parse problem info from filename
+            filename = note_file.stem  # Remove .md extension
+            if " - " in filename:
+                problem_id, title = filename.split(" - ", 1)
+            else:
+                problem_id, title = filename, "Unknown"
+            
+            # Create enhanced NotebookLM format
+            enhanced_content = create_notebooklm_format(content, problem_id, title)
+            
+            # Save to NotebookLM export directory
+            export_path = export_dir / f"{filename}_notebooklm.md"
+            with open(export_path, 'w', encoding='utf-8') as f:
+                f.write(enhanced_content)
+            
+            exported_count += 1
+            
+        except Exception as e:
+            print(f"❌ Failed to export {note_file}: {e}")
     
     # Create index file
-    with open(os.path.join(export_dir, "!index.md"), "w") as f:
-        f.write("# DSA Mastery Collection\n\n")
-        f.write("## Patterns\n")
-        for file in os.listdir(patterns_dest):
-            if file.endswith(".md"):
-                f.write(f"- [[Patterns/{file}]]\n")
-        
-        f.write("\n## Problems\n")
-        for file in os.listdir(problems_dest):
-            if file.endswith(".md"):
-                f.write(f"- [[Problems/{file}]]\n")
+    create_notebooklm_index(export_dir)
     
-    print(f"Exported to {export_dir} for NotebookLM import")
+    print(f"✅ Exported {exported_count} notes to NotebookLM format")
+    print(f"📁 Export location: {export_dir.absolute()}")
+    return True
+
+def create_notebooklm_format(content, problem_id, title):
+    """Create enhanced NotebookLM format with better structure and metadata"""
+    
+    # Extract key sections from the content
+    sections = parse_note_sections(content)
+    
+    # Create enhanced format
+    enhanced = f"""# DSA Problem: {problem_id} - {title}
+
+## 📋 Problem Information
+- **Problem ID**: {problem_id}
+- **Title**: {title}
+- **Export Date**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+- **Source**: DSA Mastery System
+
+## 🎯 Problem Overview
+{sections.get('problem', 'Problem description not available')}
+
+## 💡 Key Concepts
+{sections.get('intuition', 'Intuition not available')}
+
+## 🔍 Approach Analysis
+### Brute Force
+{sections.get('brute_force', 'Brute force approach not available')}
+
+### Optimal Solution
+{sections.get('optimal', 'Optimal solution not available')}
+
+## 💻 Implementation
+```java
+{sections.get('code', 'Code implementation not available')}
+```
+
+## 📊 Complexity Analysis
+- **Time Complexity**: {sections.get('time_complexity', 'Not specified')}
+- **Space Complexity**: {sections.get('space_complexity', 'Not specified')}
+
+## 🎯 Key Insights
+{sections.get('insights', 'Key insights not available')}
+
+## 📚 Related Concepts
+- **Pattern**: {sections.get('pattern', 'Not specified')}
+- **Data Structures**: {sections.get('data_structures', 'Not specified')}
+- **Algorithms**: {sections.get('algorithms', 'Not specified')}
+
+## 🔗 Study Resources
+- **LeetCode Link**: [Problem {problem_id}](https://leetcode.com/problems/{title.lower().replace(' ', '-')}/)
+- **Related Problems**: {sections.get('related_problems', 'None specified')}
+
+## 💭 Notes for NotebookLM
+This problem demonstrates important DSA concepts. You can ask me about:
+- The algorithm pattern used
+- Time/space complexity analysis
+- Similar problems and variations
+- Implementation details and edge cases
+- Common mistakes and how to avoid them
+
+---
+*Generated by DSA Mastery System for NotebookLM*
+"""
+    
+    return enhanced
+
+def parse_note_sections(content):
+    """Parse the original note content into structured sections"""
+    sections = {}
+    
+    lines = content.split('\n')
+    current_section = None
+    current_content = []
+    
+    for line in lines:
+        line = line.strip()
+        
+        # Detect section headers
+        if line.startswith('## ') or line.startswith('### '):
+            # Save previous section
+            if current_section and current_content:
+                sections[current_section] = '\n'.join(current_content).strip()
+            
+            # Start new section
+            current_section = line.replace('#', '').strip().lower()
+            current_content = []
+        elif line and current_section:
+            current_content.append(line)
+    
+    # Save last section
+    if current_section and current_content:
+        sections[current_section] = '\n'.join(current_content).strip()
+    
+    return sections
+
+def create_notebooklm_index(export_dir):
+    """Create an index file for NotebookLM with all exported problems"""
+    
+    index_content = """# DSA Mastery System - NotebookLM Index
+
+## 📚 All Problems
+
+This index contains all DSA problems exported from the DSA Mastery System.
+
+### 🎯 How to Use This in NotebookLM
+
+1. **Import this index** into your NotebookLM workspace
+2. **Ask questions** about any DSA concept or problem
+3. **Get explanations** of algorithms, patterns, and implementations
+4. **Find related problems** and connections between concepts
+
+### 📋 Available Problems
+
+"""
+    
+    # List all exported files
+    for note_file in sorted(export_dir.glob("*_notebooklm.md")):
+        filename = note_file.stem.replace("_notebooklm", "")
+        if " - " in filename:
+            problem_id, title = filename.split(" - ", 1)
+            index_content += f"- **{problem_id}**: {title}\n"
+    
+    index_content += f"""
+
+### 🔗 Quick Actions
+- Ask: "Explain the Two Pointers pattern"
+- Ask: "Show me problems similar to Binary Search"
+- Ask: "What's the time complexity of Dynamic Programming solutions?"
+- Ask: "Give me examples of Stack problems"
+
+---
+*Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
+"""
+    
+    # Save index file
+    index_path = export_dir / "00_INDEX.md"
+    with open(index_path, 'w', encoding='utf-8') as f:
+        f.write(index_content)
+    
+    print(f"✅ Created NotebookLM index: {index_path}")
+
+if __name__ == "__main__":
+    export_for_notebooklm()

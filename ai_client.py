@@ -2,10 +2,32 @@ import requests
 import json
 import time
 import os
+import hashlib
 from config import USE_GROQ, GROQ_API_KEY, OPENROUTER_API_KEY
 
+CACHE_FILE = "ai_cache.json"
+
+def _get_cache():
+    try:
+        with open(CACHE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_cache(cache):
+    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(cache, f, indent=2, ensure_ascii=False)
+
+def _prompt_hash(prompt):
+    return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+
 def call_ai_api(prompt: str, model: str = None, max_retries=3):
-    """Unified AI interface with automatic failover and retries"""
+    """Unified AI interface with automatic failover and retries, now with JSON cache"""
+    cache = _get_cache()
+    key = _prompt_hash(prompt)
+    if key in cache:
+        return cache[key]
+    
     # Check if API keys are configured
     if not GROQ_API_KEY and not OPENROUTER_API_KEY:
         print("⚠️ No API keys found. Using fallback response.")
@@ -17,6 +39,8 @@ def call_ai_api(prompt: str, model: str = None, max_retries=3):
                 print(f"🤖 Using Groq API (attempt {attempt + 1})")
                 response = call_groq_api(prompt, model)
                 if response and response.strip():
+                    cache[key] = response
+                    _save_cache(cache)
                     return response
                 else:
                     print(f"⚠️ Groq API returned empty response (attempt {attempt + 1})")
@@ -24,6 +48,8 @@ def call_ai_api(prompt: str, model: str = None, max_retries=3):
                 print(f"🤖 Using OpenRouter API (attempt {attempt + 1})")
                 response = call_openrouter_api(prompt, model)
                 if response and response.strip():
+                    cache[key] = response
+                    _save_cache(cache)
                     return response
                 else:
                     print(f"⚠️ OpenRouter API returned empty response (attempt {attempt + 1})")
@@ -125,7 +151,6 @@ def call_groq_api(prompt: str, model: str = None):
             timeout=120
         )
         response.raise_for_status()
-        
         result = response.json()
         if "choices" in result and len(result["choices"]) > 0:
             content = result["choices"][0]["message"]["content"]
@@ -138,7 +163,6 @@ def call_groq_api(prompt: str, model: str = None):
         else:
             print("⚠️ Groq API response missing choices")
             return get_fallback_response(prompt)
-            
     except requests.exceptions.RequestException as e:
         print(f"❌ Groq API request failed: {e}")
         return get_fallback_response(prompt)
@@ -174,7 +198,6 @@ def call_openrouter_api(prompt: str, model: str = None):
             timeout=120
         )
         response.raise_for_status()
-        
         result = response.json()
         if "choices" in result and len(result["choices"]) > 0:
             content = result["choices"][0]["message"]["content"]
@@ -187,7 +210,6 @@ def call_openrouter_api(prompt: str, model: str = None):
         else:
             print("⚠️ OpenRouter API response missing choices")
             return get_fallback_response(prompt)
-            
     except requests.exceptions.RequestException as e:
         print(f"❌ OpenRouter API request failed: {e}")
         return get_fallback_response(prompt)
