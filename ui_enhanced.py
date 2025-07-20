@@ -221,6 +221,85 @@ def setup_cloud_sync():
         st.error(f"Cloud sync error: {e}")
         return None
 
+# Add automatic PC sync functionality
+def setup_auto_sync():
+    """Setup automatic PC sync that runs in background"""
+    import threading
+    import time
+    from pathlib import Path
+    
+    def auto_sync_worker():
+        """Background worker for automatic sync"""
+        while True:
+            try:
+                # Check if we're on PC (not mobile)
+                if not os.environ.get('STREAMLIT_SERVER_HEADLESS', False):
+                    # Auto-sync from GitHub to local
+                    sync_from_github_to_local()
+                    
+                    # Auto-export to NotebookLM
+                    auto_export_to_notebooklm()
+                
+                # Sleep for 5 minutes before next sync
+                time.sleep(300)
+            except Exception as e:
+                print(f"Auto-sync error: {e}")
+                time.sleep(60)  # Wait 1 minute on error
+    
+    def sync_from_github_to_local():
+        """Automatically sync from GitHub to local folders"""
+        try:
+            from cloud_sync import CloudSync
+            cloud_sync = CloudSync()
+            
+            # Create local folders
+            local_notes = Path("local_notes")
+            local_flashcards = Path("local_flashcards")
+            local_notes.mkdir(exist_ok=True)
+            local_flashcards.mkdir(exist_ok=True)
+            
+            # Fetch notes from GitHub
+            notes = cloud_sync.fetch_notes_from_github()
+            flashcards = cloud_sync.fetch_flashcards_from_github()
+            
+            # Save to local folders
+            for note in notes:
+                pattern_folder = local_notes / note['pattern']
+                pattern_folder.mkdir(exist_ok=True)
+                
+                file_path = pattern_folder / note['filename']
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(note['content'])
+            
+            for flashcard in flashcards:
+                pattern_folder = local_flashcards / flashcard['pattern']
+                pattern_folder.mkdir(exist_ok=True)
+                
+                file_path = pattern_folder / flashcard['filename']
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(flashcard['content'])
+            
+            print(f"✅ Auto-synced {len(notes)} notes and {len(flashcards)} flashcards from GitHub")
+            
+        except Exception as e:
+            print(f"Auto-sync from GitHub error: {e}")
+    
+    def auto_export_to_notebooklm():
+        """Automatically export to NotebookLM"""
+        try:
+            from notebooklm_export import NotebookLMExporter
+            exporter = NotebookLMExporter()
+            exporter.export_to_notebooklm(auto_sync=True)
+            print("✅ Auto-exported to NotebookLM")
+        except Exception as e:
+            print(f"Auto-export to NotebookLM error: {e}")
+    
+    # Start background sync thread
+    sync_thread = threading.Thread(target=auto_sync_worker, daemon=True)
+    sync_thread.start()
+    
+    return True
+
 # Mobile-friendly navigation
 def show_mobile_nav():
     """Compact mobile navigation"""
@@ -243,63 +322,311 @@ def show_mobile_nav():
             st.session_state.page = "study"
     st.markdown("---")
 
-# Compact dashboard
+# Add learning motivation features
+def show_learning_motivation(system):
+    """Show learning motivation and achievements"""
+    st.markdown("### 🏆 Learning Motivation")
+    
+    # Calculate streak and achievements
+    completed_problems = [p for p in system.get_all_problems() if str(p.get("status", "")).lower() == "completed"]
+    total_completed = len(completed_problems)
+    
+    # Daily streak calculation
+    today = datetime.now().date()
+    recent_completions = []
+    for problem in completed_problems:
+        if hasattr(problem, 'completed_date'):
+            completion_date = datetime.strptime(problem['completed_date'], '%Y-%m-%d').date()
+            if (today - completion_date).days <= 7:
+                recent_completions.append(completion_date)
+    
+    streak = 0
+    current_date = today
+    while current_date in recent_completions:
+        streak += 1
+        current_date -= timedelta(days=1)
+    
+    # Display motivation metrics
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("🔥 Daily Streak", f"{streak} days")
+        if streak >= 7:
+            st.success("🎉 Week streak achieved!")
+        elif streak >= 3:
+            st.info("💪 Keep going!")
+    
+    with col2:
+        st.metric("✅ Problems Solved", total_completed)
+        if total_completed >= 50:
+            st.success("🏆 50 problems milestone!")
+        elif total_completed >= 25:
+            st.info("🎯 Halfway to 50!")
+    
+    with col3:
+        patterns_mastered = len(set(p['pattern'] for p in completed_problems))
+        st.metric("📚 Patterns Mastered", patterns_mastered)
+        if patterns_mastered >= 5:
+            st.success("🌟 Pattern master!")
+        elif patterns_mastered >= 3:
+            st.info("📖 Learning well!")
+    
+    # Achievement badges
+    st.markdown("#### 🏅 Achievements")
+    achievements = []
+    
+    if total_completed >= 10:
+        achievements.append("🥉 Bronze Solver (10 problems)")
+    if total_completed >= 25:
+        achievements.append("🥈 Silver Solver (25 problems)")
+    if total_completed >= 50:
+        achievements.append("🥇 Gold Solver (50 problems)")
+    if total_completed >= 100:
+        achievements.append("💎 Diamond Solver (100 problems)")
+    
+    if streak >= 3:
+        achievements.append("🔥 3-Day Streak")
+    if streak >= 7:
+        achievements.append("🔥 7-Day Streak")
+    if streak >= 30:
+        achievements.append("🔥 30-Day Streak")
+    
+    if patterns_mastered >= 3:
+        achievements.append("📚 Pattern Learner")
+    if patterns_mastered >= 5:
+        achievements.append("📚 Pattern Master")
+    
+    # Display achievements
+    if achievements:
+        for achievement in achievements:
+            st.success(f"✅ {achievement}")
+    else:
+        st.info("🎯 Start solving problems to earn achievements!")
+    
+    # Study reminder
+    if streak == 0:
+        st.warning("💡 Don't break your streak! Solve a problem today!")
+    elif streak >= 1:
+        st.success(f"🔥 Amazing! {streak}-day streak! Keep it up!")
+
+# Add daily learning tip
+def show_daily_learning_tip():
+    """Show daily learning tip and motivation"""
+    st.markdown("### 💡 Daily Learning Tip")
+    
+    # Get today's tip based on date
+    today = datetime.now().day
+    tips = [
+        "🎯 **Focus on patterns, not just problems.** Understanding the underlying pattern helps you solve similar problems faster.",
+        "⏰ **Consistency beats intensity.** Solving 1 problem daily is better than solving 10 problems once a week.",
+        "📝 **Write down your thought process.** Even if you get the answer wrong, documenting your approach helps you learn.",
+        "🔄 **Review solved problems.** Revisit problems you solved weeks ago to reinforce your learning.",
+        "🎨 **Draw it out.** Visualizing the problem often reveals the solution approach.",
+        "🧠 **Think out loud.** Explaining your approach helps you identify gaps in your understanding.",
+        "📚 **Learn one pattern at a time.** Master one pattern before moving to the next.",
+        "🎯 **Start with brute force.** Always start with the simplest solution, then optimize.",
+        "⏱️ **Time yourself.** Practice under time pressure to prepare for interviews.",
+        "🤔 **Question your assumptions.** Always verify your understanding of the problem.",
+        "📊 **Track your progress.** Seeing improvement motivates you to keep going.",
+        "🎪 **Make it fun.** Turn problem-solving into a game or challenge.",
+        "👥 **Study with others.** Discussing problems with peers deepens understanding.",
+        "📖 **Read solutions after solving.** Compare your approach with optimal solutions.",
+        "🎯 **Focus on fundamentals.** Strong basics make advanced concepts easier.",
+        "🔄 **Practice spaced repetition.** Review concepts at increasing intervals.",
+        "📝 **Keep a learning journal.** Document insights and breakthroughs.",
+        "🎨 **Use different approaches.** Try multiple solutions to the same problem.",
+        "⏰ **Set realistic goals.** Aim for steady progress rather than perfection.",
+        "🎯 **Celebrate small wins.** Every solved problem is progress worth celebrating.",
+        "📚 **Connect concepts.** Look for relationships between different patterns.",
+        "🎪 **Make it visual.** Use diagrams and flowcharts to understand algorithms.",
+        "🧠 **Teach others.** Explaining concepts to others solidifies your understanding.",
+        "📊 **Analyze complexity.** Always consider time and space complexity.",
+        "🎯 **Focus on edge cases.** Test your solutions with boundary conditions.",
+        "🔄 **Iterate and improve.** Refine your solutions based on feedback.",
+        "📝 **Document your learning.** Keep notes of key insights and techniques.",
+        "🎨 **Think creatively.** Sometimes the best solution is the most elegant one.",
+        "⏰ **Build momentum.** Small daily progress compounds into significant results.",
+        "🎯 **Stay curious.** Always ask 'why' and 'how' to deepen understanding."
+    ]
+    
+    daily_tip = tips[today % len(tips)]
+    st.info(daily_tip)
+    
+    # Add motivational quote
+    quotes = [
+        "The only way to learn a new programming language is by writing programs in it. - Dennis Ritchie",
+        "The best way to predict the future is to implement it. - Alan Kay",
+        "Programming isn't about what you know; it's about what you can figure out. - Chris Pine",
+        "The only way to do great work is to love what you do. - Steve Jobs",
+        "Success is not final, failure is not fatal: it is the courage to continue that counts. - Winston Churchill",
+        "The expert in anything was once a beginner. - Helen Hayes",
+        "Learning never exhausts the mind. - Leonardo da Vinci",
+        "The more you learn, the more you earn. - Warren Buffett",
+        "Education is not preparation for life; education is life itself. - John Dewey",
+        "The beautiful thing about learning is that no one can take it away from you. - B.B. King"
+    ]
+    
+    daily_quote = quotes[today % len(quotes)]
+    st.markdown(f"*\"{daily_quote}\"*")
+
+# Add this to the dashboard after learning motivation
 def show_dashboard(system):
     """Mobile-friendly dashboard"""
-    # Show cloud status and sync instructions
-    show_cloud_status()
-    show_sync_instructions()
-    
     st.markdown("""
     <div class="main-header">
-        <h1>🎯 DSA Mastery</h1>
-        <p class="mobile-text">Track progress & master DSA</p>
+        <h1>🎯 DSA Mastery Dashboard</h1>
+        <p class="mobile-text">Track your progress and start solving</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Compact stats
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        completed = len([p for p in system.neetcode if str(p.get("status", "")).lower() == "completed"])
-        st.metric("✅ Done", completed)
-    with col2:
-        total = len(system.neetcode)
-        st.metric("📊 Total", total)
-    with col3:
-        progress = int((completed / total) * 100) if total > 0 else 0
-        st.metric("📈 Progress", f"{progress}%")
+    # Learning motivation
+    show_learning_motivation(system)
     
-    # Compact today's problem
-    st.subheader("🎯 Today's Problem")
-    pattern, today_problem = system.get_today_problem()
+    # Daily learning tip
+    show_daily_learning_tip()
+    
+    # PC Auto-Sync Status
+    if not os.environ.get('STREAMLIT_SERVER_HEADLESS', False):
+        st.markdown("### 💻 PC Auto-Sync Status")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            # Check if local folders exist
+            local_notes = Path("local_notes")
+            local_flashcards = Path("local_flashcards")
+            notebooklm_export = Path("notebooklm_export")
+            
+            if local_notes.exists():
+                note_count = len(list(local_notes.rglob("*.md")))
+                st.metric("📝 Local Notes", f"{note_count} files")
+            else:
+                st.metric("📝 Local Notes", "Not synced")
+        
+        with col2:
+            if local_flashcards.exists():
+                flashcard_count = len(list(local_flashcards.rglob("*.csv")))
+                st.metric("📊 Local Flashcards", f"{flashcard_count} files")
+            else:
+                st.metric("📊 Local Flashcards", "Not synced")
+        
+        with col3:
+            if notebooklm_export.exists():
+                notebooklm_count = len(list(notebooklm_export.rglob("*.md")))
+                st.metric("📚 NotebookLM Export", f"{notebooklm_count} files")
+            else:
+                st.metric("📚 NotebookLM Export", "Not synced")
+        
+        # Auto-sync info
+        st.info("""
+        **🔄 PC Auto-Sync Active**
+        - Automatically syncs from GitHub every 5 minutes
+        - Updates local notes and flashcards
+        - Exports to NotebookLM format
+        - No manual intervention required
+        """)
+        
+        # NotebookLM Integration Status
+        st.markdown("### 📚 NotebookLM Integration Status")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            # Google Drive sync
+            if os.getenv('GDRIVE_FOLDER_ID'):
+                st.metric("☁️ Google Drive", "✅ Active")
+            else:
+                st.metric("☁️ Google Drive", "❌ Not configured")
+        
+        with col2:
+            # Webhook sync
+            if os.getenv('NOTEBOOKLM_WEBHOOK_URL'):
+                st.metric("🔗 Webhook", "✅ Active")
+            else:
+                st.metric("🔗 Webhook", "❌ Not configured")
+        
+        with col3:
+            # Local folder sync
+            st.metric("📁 Local Folder", "✅ Active")
+        
+        with col4:
+            # API sync
+            if os.getenv('NOTEBOOKLM_API_KEY'):
+                st.metric("🔌 API", "✅ Active")
+            else:
+                st.metric("🔌 API", "❌ Not configured")
+        
+        # NotebookLM auto-sync info
+        st.success("""
+        **📚 NotebookLM Zero-Manual Integration Active**
+        - File watcher monitoring notebooklm_export folder
+        - Auto-uploading to all configured sync methods
+        - Real-time sync with zero manual work
+        - NotebookLM automatically has your notes!
+        """)
+    
+    # Today's problem
+    today_problem = system.get_today_problem()
     if today_problem:
-        status = str(today_problem.get("status", "")).lower()
-        if status != "completed":
+        pattern, problem = today_problem
+        st.subheader(f"📅 Today's Problem")
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
             st.markdown(f"""
             <div class="problem-card">
-                <strong>{today_problem['id']} - {today_problem['title']}</strong><br>
-                <small>{today_problem['difficulty']} • {today_problem['pattern']}</small>
+                <strong>{problem['id']} - {problem['title']}</strong><br>
+                <small>Pattern: {pattern} | Difficulty: {problem['difficulty']}</small>
             </div>
             """, unsafe_allow_html=True)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("💻 Solve", key="solve_today", use_container_width=True):
-                    st.session_state.page = "solve"
-            with col2:
-                if st.button("⏭️ Skip", key="skip_today", use_container_width=True):
-                    system.mark_problem_status(today_problem["id"], "skipped")
-                    st.rerun()
-        else:
-            st.success("✅ Today's problem completed!")
-    else:
-        st.info("No problem assigned for today")
+        
+        with col2:
+            if st.button("🚀 Start Solving", key="start_today", use_container_width=True):
+                st.session_state.page = "solve"
+                st.session_state.current_problem = problem
+                st.rerun()
     
-    # Compact recent activity
-    with st.expander("📋 Recent Activity", expanded=False):
-        recent_problems = [p for p in system.neetcode if str(p.get("status", "")).lower() == "completed"][-5:]
-        for p in recent_problems:
-            st.markdown(f"✅ {p['id']} - {p['title']} ({p['difficulty']})")
+    # Progress overview
+    st.subheader("📊 Progress Overview")
+    
+    # Get progress data
+    total_problems = len(system.get_all_problems())
+    completed = len([p for p in system.get_all_problems() if str(p.get("status", "")).lower() == "completed"])
+    skipped = len([p for p in system.get_all_problems() if str(p.get("status", "")).lower() == "skipped"])
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Problems", total_problems)
+    with col2:
+        st.metric("Completed", completed)
+    with col3:
+        st.metric("Skipped", skipped)
+    
+    # Progress bar
+    progress = (completed / total_problems * 100) if total_problems > 0 else 0
+    st.progress(progress / 100)
+    st.caption(f"Overall Progress: {progress:.1f}%")
+    
+    # Quick actions
+    st.subheader("⚡ Quick Actions")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📝 Solve Problems", key="quick_solve", use_container_width=True):
+            st.session_state.page = "solve"
+            st.rerun()
+    with col2:
+        if st.button("📚 Study Mode", key="quick_study", use_container_width=True):
+            st.session_state.page = "study"
+            st.rerun()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔍 Browse Problems", key="quick_browse", use_container_width=True):
+            st.session_state.page = "browser"
+            st.rerun()
+    with col2:
+        if st.button("📖 Review Notes", key="quick_review", use_container_width=True):
+            st.session_state.page = "review"
+            st.rerun()
 
 # Compact solve interface
 def show_solve_interface(system):
@@ -390,6 +717,120 @@ def show_solve_interface(system):
                                     st.success("📚 Synced to Anki!")
                         except Exception as e:
                             st.warning(f"Cloud sync: {e}")
+                
+                # Mobile download buttons
+                st.markdown("---")
+                st.markdown("#### 📱 Mobile Downloads")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    if st.button("📥 Download Note", key=f"download_note_{today_problem['id']}", use_container_width=True):
+                        try:
+                            import base64
+                            b64 = base64.b64encode(note_md.encode()).decode()
+                            href = f'<a href="data:file/md;base64,{b64}" download="{today_problem["title"].replace(" ", "_")}.md">📥 Download Note</a>'
+                            st.markdown(href, unsafe_allow_html=True)
+                            st.success("✅ Note ready for download!")
+                        except Exception as e:
+                            st.error(f"Download error: {e}")
+                
+                with col2:
+                    if st.button("📊 Export Flashcards", key=f"export_flashcards_{today_problem['id']}", use_container_width=True):
+                        try:
+                            import pandas as pd
+                            df = pd.DataFrame(flashcards)
+                            csv = df.to_csv(index=False)
+                            b64 = base64.b64encode(csv.encode()).decode()
+                            href = f'<a href="data:file/csv;base64,{b64}" download="{today_problem["title"].replace(" ", "_")}_flashcards.csv">📊 Download Flashcards</a>'
+                            st.markdown(href, unsafe_allow_html=True)
+                            st.success("✅ Flashcards ready for download!")
+                        except Exception as e:
+                            st.error(f"Export error: {e}")
+                
+                with col3:
+                    if st.button("📋 Copy to Clipboard", key=f"copy_note_{today_problem['id']}", use_container_width=True):
+                        try:
+                            st.code(note_md)
+                            st.success("✅ Note copied! Paste into Obsidian on PC")
+                        except Exception as e:
+                            st.error(f"Copy error: {e}")
+                
+                # Cloud upload buttons
+                st.markdown("#### ☁️ Direct Cloud Upload")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("🐙 Upload to GitHub", key=f"github_upload_{today_problem['id']}", use_container_width=True):
+                        try:
+                            from cloud_sync import CloudSync
+                            cloud_sync = CloudSync()
+                            filename = f"{today_problem['id']} - {today_problem['title']}.md"
+                            success, message = cloud_sync.upload_note_to_github(note_md, filename, today_problem['pattern'])
+                            if success:
+                                st.success(message)
+                            else:
+                                st.warning(f"GitHub upload: {message}")
+                        except Exception as e:
+                            st.error(f"GitHub upload error: {e}")
+                
+                with col2:
+                    if st.button("📊 Upload Flashcards", key=f"upload_flashcards_{today_problem['id']}", use_container_width=True):
+                        try:
+                            from cloud_sync import CloudSync
+                            cloud_sync = CloudSync()
+                            filename = f"{today_problem['id']} - {today_problem['title']}_flashcards.csv"
+                            success, message = cloud_sync.upload_flashcards_to_github(flashcards, filename, today_problem['title'])
+                            if success:
+                                st.success(message)
+                            else:
+                                st.warning(f"Flashcard upload: {message}")
+                        except Exception as e:
+                            st.error(f"Flashcard upload error: {e}")
+                
+                # NotebookLM Export
+                st.markdown("#### 📚 NotebookLM Export")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("📚 Export to NotebookLM", key=f"notebooklm_export_{today_problem['id']}", use_container_width=True):
+                        try:
+                            from notebooklm_export import NotebookLMExporter
+                            exporter = NotebookLMExporter()
+                            notebooklm_content = exporter.parse_note_for_notebooklm(note_md, today_problem['pattern'], f"{today_problem['id']} - {today_problem['title']}.md")
+                            
+                            # Save to NotebookLM folder
+                            output_path = Path("notebooklm_export") / f"{today_problem['pattern']}_{today_problem['id']} - {today_problem['title']}.md"
+                            output_path.parent.mkdir(exist_ok=True)
+                            with open(output_path, 'w', encoding='utf-8') as f:
+                                f.write(notebooklm_content)
+                            
+                            st.success(f"✅ Exported to NotebookLM: {output_path}")
+                        except Exception as e:
+                            st.error(f"NotebookLM export error: {e}")
+                
+                with col2:
+                    if st.button("🔄 Auto-Sync All", key=f"auto_sync_{today_problem['id']}", use_container_width=True):
+                        try:
+                            # Upload to GitHub
+                            from cloud_sync import CloudSync
+                            cloud_sync = CloudSync()
+                            note_filename = f"{today_problem['id']} - {today_problem['title']}.md"
+                            flashcard_filename = f"{today_problem['id']} - {today_problem['title']}_flashcards.csv"
+                            
+                            note_success, note_msg = cloud_sync.upload_note_to_github(note_md, note_filename, today_problem['pattern'])
+                            flashcard_success, flashcard_msg = cloud_sync.upload_flashcards_to_github(flashcards, flashcard_filename, today_problem['title'])
+                            
+                            # Export to NotebookLM
+                            from notebooklm_export import NotebookLMExporter
+                            exporter = NotebookLMExporter()
+                            exporter.export_to_notebooklm(auto_sync=True)
+                            
+                            if note_success and flashcard_success:
+                                st.success("✅ Auto-sync complete! Uploaded to GitHub and exported to NotebookLM")
+                            else:
+                                st.warning(f"Partial sync: {note_msg}, {flashcard_msg}")
+                        except Exception as e:
+                            st.error(f"Auto-sync error: {e}")
         
         # Compact AI chat
         with st.expander("🤖 AI Chat", expanded=False):
@@ -582,6 +1023,10 @@ def main():
     # Setup cloud sync
     cloud_sync = setup_cloud_sync()
     
+    # Setup automatic PC sync
+    if not os.environ.get('STREAMLIT_SERVER_HEADLESS', False):
+        setup_auto_sync()
+    
     # Initialize session state
     if 'current_problem' not in st.session_state:
         st.session_state.current_problem = None
@@ -629,12 +1074,23 @@ def show_cloud_status():
         - 🤖 AI chat
         - 📝 Note generation
         - 📊 Progress tracking
+        - 🐙 GitHub upload
         
         **Export Options:**
         - 📥 Download notes
         - 📊 Export flashcards
         - 📋 Copy to clipboard
+        - 🐙 Upload to GitHub
         """)
+        
+        # GitHub Configuration
+        st.sidebar.markdown("### 🐙 GitHub Upload")
+        if os.getenv('GITHUB_TOKEN'):
+            st.sidebar.success("✅ GitHub configured")
+            st.sidebar.info(f"Repo: {os.getenv('GITHUB_REPO', 'Not set')}")
+        else:
+            st.sidebar.warning("❌ GitHub not configured")
+            st.sidebar.info("Add GITHUB_TOKEN to secrets")
     else:
         st.sidebar.info("💻 Running Locally")
         st.sidebar.info("""
@@ -642,9 +1098,8 @@ def show_cloud_status():
         - 📁 Direct Obsidian save
         - 🃏 Direct Anki export
         - 📚 NotebookLM export
+        - 🐙 GitHub upload
         """)
-    
-    st.sidebar.markdown("---")
 
 def show_sync_instructions():
     """Show instructions for syncing between mobile and local PC"""

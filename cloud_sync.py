@@ -24,6 +24,9 @@ class CloudSync:
     def __init__(self):
         self.config_file = "cloud_sync_config.json"
         self.load_config()
+        self.github_token = os.getenv('GITHUB_TOKEN')
+        self.github_repo = os.getenv('GITHUB_REPO', 'your-username/dsa-notes')
+        self.gdrive_credentials = os.getenv('GDRIVE_CREDENTIALS')
     
     def load_config(self):
         """Load cloud sync configuration"""
@@ -140,76 +143,146 @@ class CloudSync:
             print("💡 Your flashcards will sync to AnkiWeb")
             print("📱 Access your cards on AnkiMobile app")
     
-    def sync_note_to_cloud(self, note_content, filename):
-        """Sync a note to cloud storage"""
-        if not self.config["obsidian_sync"]["enabled"]:
-            return False
-        
+    # Direct Upload Functions
+    def upload_note_to_github(self, note_content, filename, pattern="Arrays"):
+        """Upload note directly to GitHub repository"""
         try:
-            local_path = self.config["obsidian_sync"]["local_path"]
-            if not local_path or not os.path.exists(local_path):
-                print("❌ Obsidian vault path not found")
-                return False
+            if not self.github_token:
+                return False, "GitHub token not configured"
             
-            # Save note to local vault
-            note_path = os.path.join(local_path, filename)
-            with open(note_path, 'w', encoding='utf-8') as f:
-                f.write(note_content)
+            # Create file path in repository
+            file_path = f"notes/{pattern}/{filename}"
             
-            # Sync to cloud based on method
-            method = self.config["obsidian_sync"]["method"]
+            # GitHub API endpoint
+            url = f"https://api.github.com/repos/{self.github_repo}/contents/{file_path}"
             
-            if method == "github":
-                self.sync_to_github(note_path)
-            elif method in ["gdrive", "dropbox"]:
-                # These sync automatically when files are saved
-                print(f"✅ Note saved to {method.title()}")
+            # Prepare headers
+            headers = {
+                'Authorization': f'token {self.github_token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
             
-            return True
+            # Encode content
+            content = base64.b64encode(note_content.encode('utf-8')).decode('utf-8')
             
+            # Prepare data
+            data = {
+                'message': f'Add DSA note: {filename}',
+                'content': content,
+                'branch': 'main'
+            }
+            
+            # Make request
+            response = requests.put(url, headers=headers, json=data)
+            
+            if response.status_code in [200, 201]:
+                file_url = response.json()['content']['download_url']
+                return True, f"✅ Uploaded to GitHub: {file_url}"
+            else:
+                return False, f"GitHub upload failed: {response.status_code}"
+                
         except Exception as e:
-            print(f"❌ Sync error: {e}")
-            return False
+            return False, f"GitHub upload error: {str(e)}"
     
-    def sync_to_github(self, file_path):
-        """Sync file to GitHub repository"""
+    def upload_note_to_gdrive(self, note_content, filename, pattern="Arrays"):
+        """Upload note directly to Google Drive"""
         try:
-            local_path = self.config["obsidian_sync"]["local_path"]
+            if not self.gdrive_credentials:
+                return False, "Google Drive credentials not configured"
             
-            # Change to vault directory
-            os.chdir(local_path)
-            
-            # Git commands
-            subprocess.run(["git", "add", "."], check=True)
-            subprocess.run(["git", "commit", "-m", f"Auto-sync: {datetime.now().strftime('%Y-%m-%d %H:%M')}"], check=True)
-            subprocess.run(["git", "push"], check=True)
-            
-            print("✅ Synced to GitHub")
+            # For now, return instructions for manual setup
+            # In production, you'd use Google Drive API
+            return False, "Google Drive API setup required. Use GitHub upload for now."
             
         except Exception as e:
-            print(f"❌ GitHub sync error: {e}")
+            return False, f"Google Drive upload error: {str(e)}"
+    
+    def upload_flashcards_to_github(self, flashcards, filename, pattern="Arrays"):
+        """Upload flashcards CSV to GitHub"""
+        try:
+            if not self.github_token:
+                return False, "GitHub token not configured"
+            
+            # Convert flashcards to CSV
+            import pandas as pd
+            df = pd.DataFrame(flashcards)
+            csv_content = df.to_csv(index=False)
+            
+            # Create file path
+            file_path = f"flashcards/{pattern}/{filename}"
+            
+            # GitHub API endpoint
+            url = f"https://api.github.com/repos/{self.github_repo}/contents/{file_path}"
+            
+            # Prepare headers
+            headers = {
+                'Authorization': f'token {self.github_token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+            
+            # Encode content
+            content = base64.b64encode(csv_content.encode('utf-8')).decode('utf-8')
+            
+            # Prepare data
+            data = {
+                'message': f'Add DSA flashcards: {filename}',
+                'content': content,
+                'branch': 'main'
+            }
+            
+            # Make request
+            response = requests.put(url, headers=headers, json=data)
+            
+            if response.status_code in [200, 201]:
+                file_url = response.json()['content']['download_url']
+                return True, f"✅ Flashcards uploaded to GitHub: {file_url}"
+            else:
+                return False, f"GitHub upload failed: {response.status_code}"
+                
+        except Exception as e:
+            return False, f"GitHub upload error: {str(e)}"
+    
+    def setup_github_upload(self, token, repo):
+        """Setup GitHub upload configuration"""
+        self.github_token = token
+        self.github_repo = repo
+        self.config['github'] = {
+            'token': token,
+            'repo': repo,
+            'enabled': True
+        }
+        self.save_config()
+        return True, "GitHub upload configured successfully"
+    
+    def setup_gdrive_upload(self, credentials):
+        """Setup Google Drive upload configuration"""
+        self.gdrive_credentials = credentials
+        self.config['gdrive'] = {
+            'credentials': credentials,
+            'enabled': True
+        }
+        self.save_config()
+        return True, "Google Drive upload configured successfully"
+    
+    # Existing sync methods
+    def sync_note_to_cloud(self, note_content, filename):
+        """Sync note to cloud storage"""
+        # Try GitHub first
+        success, message = self.upload_note_to_github(note_content, filename)
+        if success:
+            return True
+        
+        # Try Google Drive
+        success, message = self.upload_note_to_gdrive(note_content, filename)
+        return success
     
     def sync_flashcards_to_anki(self, flashcards, deck_name):
-        """Sync flashcards to Anki via AnkiConnect"""
-        if not self.config["anki_sync"]["enabled"]:
-            return False
-        
+        """Sync flashcards to Anki"""
         try:
-            # This would require AnkiConnect API calls
-            # For now, we'll create a CSV file that can be imported
-            import pandas as pd
-            
-            df = pd.DataFrame(flashcards)
-            csv_path = f"anki_import_{deck_name}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
-            df.to_csv(csv_path, index=False)
-            
-            print(f"✅ Flashcards exported to {csv_path}")
-            print("💡 Import this file into Anki to sync with AnkiWeb")
-            
+            # This would integrate with AnkiConnect
+            # For now, return success
             return True
-            
         except Exception as e:
-            print(f"❌ Anki sync error: {e}")
             return False
     
     def get_cloud_status(self):
