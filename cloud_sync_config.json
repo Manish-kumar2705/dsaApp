@@ -1,0 +1,13 @@
+{
+  "obsidian_sync": {
+    "enabled": false,
+    "method": "github",
+    "repo_url": "",
+    "local_path": ""
+  },
+  "anki_sync": {
+    "enabled": false,
+    "ankiweb_username": "",
+    "ankiweb_password": ""
+  }
+}

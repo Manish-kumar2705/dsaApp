@@ -639,8 +639,8 @@ if __name__ == '__main__':
                 print(f"✅ Exported {len(github_notes)} notes to NotebookLM format")
             else:
                 print("⚠️ No notes found on GitHub")
-        
-        # Create index file
+    
+    # Create index file
         self.create_index_file()
         
         # Create pattern summaries

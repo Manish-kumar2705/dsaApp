@@ -173,3 +173,59 @@ For automatic integration, install AnkiConnect addon:
 4. **Configure** ANKI_CONNECT_URL in your .env file
 """
     return instructions
+
+def generate_flashcards(problem, solution_code, analysis):
+    """Generate Anki flashcards for a DSA problem"""
+    prompt = f"""As a DSA expert, create comprehensive Anki flashcards for this problem:
+
+PROBLEM: {problem['title']}
+PATTERN: {problem.get('pattern', 'Unknown')}
+URL: {problem['url']}
+
+CODE:
+```
+{solution_code}
+```
+
+ANALYSIS:
+{analysis}
+
+Create flashcards in these categories:
+
+1. PROBLEM UNDERSTANDING
+- Problem statement → Key requirements and constraints
+- Input/Output → Example with explanation
+- Edge Cases → Important cases to handle
+
+2. SOLUTION APPROACH
+- Problem Pattern → Why this pattern fits
+- Solution Strategy → Step-by-step approach
+- Algorithm Steps → Key steps with explanation
+
+3. IMPLEMENTATION
+- Code Structure → Key components needed
+- Critical Steps → Important implementation details
+- Edge Case Handling → How to handle special cases
+
+4. COMPLEXITY
+- Time Complexity → Explanation with breakdown
+- Space Complexity → Explanation with breakdown
+- Optimization → Possible improvements
+
+5. PATTERN APPLICATION
+- Pattern Recognition → How to identify this pattern
+- Similar Problems → Related problems using same pattern
+- Variations → Common variations of this pattern
+
+Format each flashcard as:
+Front: Clear, concise question
+Back: Detailed explanation with:
+- Main points
+- Examples if helpful
+- Code snippets if relevant
+- Visual hints if applicable
+
+Return in CSV format:
+"Front","Back"
+Make cards focused but comprehensive."""
+    return call_ai_api(prompt)

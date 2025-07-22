@@ -5,6 +5,15 @@ A better, more functional interface for DSA practice
 """
 
 import streamlit as st
+
+# Page configuration - must be first Streamlit command
+st.set_page_config(
+    page_title="DSA Mastery",
+    page_icon="🎯",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
 import json
 import random
 import pandas as pd
@@ -16,225 +25,229 @@ from config import *
 from ai_client import call_ai_api
 import os
 from cloud_sync import CloudSync
+import webbrowser
+from streamlit_monaco import st_monaco
+from dsa_system import DSA_LEARNING_ORDER
 
-# Page configuration - make it mobile-friendly
-st.set_page_config(
-    page_title="DSA Mastery",
-    page_icon="🎯",
-    layout="wide",
-    initial_sidebar_state="collapsed"  # Collapse sidebar on mobile
-)
-
-# Add mobile-friendly CSS
+# Theme CSS
 st.markdown("""
 <style>
-/* Mobile-friendly styles */
-@media (max-width: 768px) {
-    .main-header h1 { font-size: 1.5rem !important; }
-    .main-header p { font-size: 0.9rem !important; }
-    .stButton > button { 
-        font-size: 0.8rem !important; 
-        padding: 0.3rem 0.6rem !important;
-        margin: 0.1rem !important;
-    }
-    .stSelectbox > div > div { font-size: 0.8rem !important; }
-    .stTextInput > div > div > input { font-size: 0.8rem !important; }
-    .stTextArea > div > div > textarea { font-size: 0.8rem !important; }
-    .stMarkdown { font-size: 0.9rem !important; }
-    .stExpander { margin: 0.2rem 0 !important; }
-    .stColumns { gap: 0.5rem !important; }
+/* Theme colors */
+:root {
+    --bg-primary: #0E1117;
+    --bg-secondary: #1E1E2F;
+    --bg-card: #262638;
+    --text-primary: #FFFFFF;
+    --text-secondary: #B0B0B0;
+    --accent-primary: #4CAF50;
+    --accent-secondary: #45a049;
+    --border-color: #383850;
+    --hover-color: rgba(76, 175, 80, 0.1);
 }
 
-/* Compact navigation */
-.nav-button {
-    font-size: 0.8rem !important;
-    padding: 0.3rem 0.5rem !important;
-    margin: 0.1rem !important;
-    border-radius: 0.3rem !important;
+/* Global styles */
+.stApp {
+    background-color: var(--bg-primary) !important;
 }
 
-/* Compact problem cards */
-.problem-card {
-    padding: 0.5rem !important;
-    margin: 0.2rem 0 !important;
-    border-radius: 0.3rem !important;
-    border: 1px solid #e0e0e0 !important;
+.main .block-container {
+    padding: 2rem 1rem !important;
 }
 
-/* Compact sidebar */
-.sidebar .sidebar-content {
-    padding: 0.5rem !important;
+/* Cards */
+.neon-card {
+    background-color: var(--bg-card) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 10px !important;
+    padding: 1.5rem !important;
+    margin-bottom: 1rem !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
 }
 
-/* Mobile-friendly text */
-.mobile-text {
-    font-size: 0.9rem !important;
-    line-height: 1.3 !important;
+.neon-card:hover {
+    box-shadow: 0 6px 8px rgba(76, 175, 80, 0.1) !important;
+    border-color: var(--accent-primary) !important;
+    transition: all 0.3s ease !important;
 }
 
-/* Compact buttons */
-.compact-btn {
-    font-size: 0.7rem !important;
-    padding: 0.2rem 0.4rem !important;
-    margin: 0.1rem !important;
-}
-
-/* Responsive columns */
-@media (max-width: 768px) {
-    .stColumns > div { 
-        width: 100% !important; 
-        margin-bottom: 0.5rem !important;
-    }
-}
-</style>
-""", unsafe_allow_html=True)
-
-# Add improved problem card CSS at the top (after other CSS)
-st.markdown('''
-<style>
-.problem-card {
-    background: #f7f7fa !important;
-    border-radius: 12px !important;
-    box-shadow: 0 2px 8px rgba(102,126,234,0.07);
-    border: 1px solid #e0e0e0 !important;
+/* Navigation */
+.nav-container {
+    background-color: var(--bg-secondary) !important;
+    border-bottom: 1px solid var(--border-color) !important;
     padding: 1rem !important;
-    margin: 0.5rem 0 !important;
-    font-size: 1rem !important;
-    color: #222 !important;
-    transition: box-shadow 0.2s;
+    margin: -1rem -1rem 1rem -1rem !important;
 }
-.problem-card a { color: #5a67d8 !important; text-decoration: underline; }
-@media (max-width: 600px) {
-    .problem-card { font-size: 0.98rem !important; padding: 0.7rem !important; }
-}
-</style>
-''', unsafe_allow_html=True)
 
-# Add improved button and header CSS at the top (after other CSS)
-st.markdown('''
-<style>
-.accent-btn {
-    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
-    color: #fff !important;
-    border: none !important;
+.nav-item {
+    color: var(--text-secondary) !important;
+    background-color: var(--bg-card) !important;
+    padding: 0.75rem 1rem !important;
     border-radius: 8px !important;
-    font-size: 1.05rem !important;
-    font-weight: 600 !important;
-    padding: 0.6rem 1.2rem !important;
-    margin: 0.2rem 0.1rem !important;
-    box-shadow: 0 2px 8px rgba(102,126,234,0.07);
-    transition: background 0.2s, box-shadow 0.2s;
+    text-decoration: none !important;
+    transition: all 0.3s ease !important;
 }
-.accent-btn:hover {
-    background: linear-gradient(90deg, #764ba2 0%, #667eea 100%) !important;
-    box-shadow: 0 4px 16px rgba(102,126,234,0.13);
-}
-.section-header {
-    font-size: 1.25rem;
-    font-weight: 700;
-    margin-top: 1.2rem;
-    margin-bottom: 0.5rem;
-    color: #5a67d8;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-.section-subtext {
-    font-size: 0.98rem;
-    color: #666;
-    margin-bottom: 0.7rem;
-}
-@media (max-width: 600px) {
-    .accent-btn { font-size: 1rem !important; padding: 0.5rem 0.7rem !important; }
-    .section-header { font-size: 1.08rem; }
-}
-</style>
-''', unsafe_allow_html=True)
 
-# Custom CSS for better styling
-st.markdown("""
-<style>
-    .main-header {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        padding: 2rem;
-        border-radius: 10px;
-        color: white;
-        margin-bottom: 2rem;
-    }
-    
-    .problem-card {
-        background: #f8f9fa;
-        padding: 1.5rem;
-        border-radius: 10px;
-        border-left: 4px solid #667eea;
-        margin: 1rem 0;
-    }
-    
-    .analysis-card {
-        background: #e8f5e8;
-        padding: 1.5rem;
-        border-radius: 10px;
-        border-left: 4px solid #4CAF50;
-        margin: 1rem 0;
-    }
-    
-    .error-card {
-        background: #ffeaea;
-        padding: 1.5rem;
-        border-radius: 10px;
-        border-left: 4px solid #F44336;
-        margin: 1rem 0;
-    }
-    
-    .difficulty-badge {
-        padding: 0.25rem 0.75rem;
-        border-radius: 15px;
-        font-size: 0.8rem;
-        font-weight: bold;
-    }
-    
-    .difficulty-easy { background: #4CAF50; color: white; }
-    .difficulty-medium { background: #FF9800; color: white; }
-    .difficulty-hard { background: #F44336; color: white; }
-    
-    .metric-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        text-align: center;
-        margin: 0.5rem;
-    }
-    
-    .code-block {
-        background: #f4f4f4;
-        padding: 1rem;
-        border-radius: 5px;
-        border-left: 4px solid #667eea;
-        font-family: 'Courier New', monospace;
-    }
-    
-    .success-message {
-        background: #d4edda;
-        color: #155724;
-        padding: 1rem;
-        border-radius: 5px;
-        border: 1px solid #c3e6cb;
-    }
-    
-    .error-message {
-        background: #f8d7da;
-        color: #721c24;
-        padding: 1rem;
-        border-radius: 5px;
-        border: 1px solid #f5c6cb;
-    }
+.nav-item:hover {
+    background-color: var(--hover-color) !important;
+    color: var(--accent-primary) !important;
+}
+
+.nav-item.active {
+    color: var(--accent-primary) !important;
+    background-color: var(--hover-color) !important;
+}
+
+/* Text styles */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+}
+
+p, div {
+    color: var(--text-primary) !important;
+}
+
+.text-secondary {
+    color: var(--text-secondary) !important;
+}
+
+/* Buttons */
+.stButton > button {
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary)) !important;
+    color: white !important;
+    border: none !important;
+    padding: 0.5rem 1rem !important;
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    transition: all 0.3s ease !important;
+}
+
+.stButton > button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 8px rgba(76, 175, 80, 0.2) !important;
+}
+
+/* Add to CSS */
+.stButton > button[type="secondary"] {
+    background: linear-gradient(90deg, #6c757d, #5c636a) !important; /* Neutral gray */
+    color: white !important;
+}
+
+/* Progress bars */
+.progress-bar {
+    background-color: var(--bg-secondary) !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
+
+.progress-fill {
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary)) !important;
+    height: 100% !important;
+    border-radius: 8px !important;
+    transition: width 0.5s ease !important;
+}
+
+/* Stats cards */
+.stats-card {
+    background-color: var(--bg-card) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    padding: 1rem !important;
+}
+
+.stats-value {
+    color: var(--accent-primary) !important;
+    font-size: 1.5rem !important;
+    font-weight: 600 !important;
+}
+
+.stats-label {
+    color: var(--text-secondary) !important;
+    font-size: 0.9rem !important;
+}
+
+/* Inputs and text areas */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea,
+.stSelectbox > div > div {
+    background-color: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+}
+
+/* Code blocks */
+.stCodeBlock {
+    background-color: var(--bg-card) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+}
+
+/* Hide Streamlit branding */
+#MainMenu {visibility: hidden;}
+header {visibility: hidden;}
+footer {visibility: hidden;}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-primary);
+}
+
+/* Info boxes */
+.stAlert {
+    background-color: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+}
+
+/* Expander */
+.streamlit-expanderHeader {
+    background-color: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+}
+
+.streamlit-expanderContent {
+    background-color: var(--bg-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 0 0 8px 8px !important;
+}
+
+.code-editor-container {
+    background-color: #1A1A2E !important;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.notes-container {
+    background-color: #2A2A3E !important;
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 15px;
+}
 </style>
 """, unsafe_allow_html=True)
 
 @st.cache_resource
 def get_system():
-    """Get cached system instance"""
+    """Get or create DSA system instance"""
     return DSAMasterySystem()
 
 def setup_cloud_sync():
@@ -397,119 +410,6 @@ def get_leetcode_url(problem):
     title = title.replace(' ', '-').replace('(', '').replace(')', '').replace(',', '').replace('.', '').replace(':', '').replace(';', '')
     return f"https://leetcode.com/problems/{title}/"
 
-# Add learning motivation features
-def show_learning_motivation(system):
-    """Show learning motivation and achievements"""
-    st.markdown("### 🏆 Learning Motivation")
-    
-    try:
-        # Calculate streak and achievements
-        all_problems = system.get_all_problems()
-        completed_problems = [p for p in all_problems if str(p.get("status", "")).lower() == "completed"]
-        total_completed = len(completed_problems)
-        
-        # Daily streak calculation
-        today = datetime.now().date()
-        recent_completions = []
-        for problem in completed_problems:
-            # Handle different possible date formats and structures
-            completion_date = None
-            if isinstance(problem, dict):
-                if 'completed_date' in problem:
-                    try:
-                        completion_date = datetime.strptime(problem['completed_date'], '%Y-%m-%d').date()
-                    except (ValueError, TypeError):
-                        continue
-                elif hasattr(problem, 'completed_date'):
-                    try:
-                        completion_date = datetime.strptime(problem.completed_date, '%Y-%m-%d').date()
-                    except (ValueError, TypeError):
-                        continue
-            
-            if completion_date and (today - completion_date).days <= 7:
-                recent_completions.append(completion_date)
-        
-        streak = 0
-        current_date = today
-        while current_date in recent_completions:
-            streak += 1
-            current_date -= timedelta(days=1)
-        
-        # Display motivation metrics
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("🔥 Daily Streak", f"{streak} days")
-            if streak >= 7:
-                st.success("🎉 Week streak achieved!")
-            elif streak >= 3:
-                st.info("💪 Keep going!")
-        
-        with col2:
-            st.metric("✅ Problems Solved", total_completed)
-            if total_completed >= 50:
-                st.success("🏆 50 problems milestone!")
-            elif total_completed >= 25:
-                st.info("🎯 Halfway to 50!")
-        
-        with col3:
-            # Safely extract patterns
-            patterns = set()
-            for p in completed_problems:
-                if isinstance(p, dict) and 'pattern' in p:
-                    patterns.add(p['pattern'])
-                elif hasattr(p, 'pattern'):
-                    patterns.add(p.pattern)
-            
-            patterns_mastered = len(patterns)
-            st.metric("📚 Patterns Mastered", patterns_mastered)
-            if patterns_mastered >= 5:
-                st.success("🌟 Pattern master!")
-            elif patterns_mastered >= 3:
-                st.info("📖 Learning well!")
-        
-        # Achievement badges
-        st.markdown("#### 🏅 Achievements")
-        achievements = []
-        
-        if total_completed >= 10:
-            achievements.append("🥉 Bronze Solver (10 problems)")
-        if total_completed >= 25:
-            achievements.append("🥈 Silver Solver (25 problems)")
-        if total_completed >= 50:
-            achievements.append("🥇 Gold Solver (50 problems)")
-        if total_completed >= 100:
-            achievements.append("💎 Diamond Solver (100 problems)")
-        
-        if streak >= 3:
-            achievements.append("🔥 3-Day Streak")
-        if streak >= 7:
-            achievements.append("🔥 7-Day Streak")
-        if streak >= 30:
-            achievements.append("🔥 30-Day Streak")
-        
-        if patterns_mastered >= 3:
-            achievements.append("📚 Pattern Learner")
-        if patterns_mastered >= 5:
-            achievements.append("📚 Pattern Master")
-        
-        # Display achievements
-        if achievements:
-            for achievement in achievements:
-                st.success(f"✅ {achievement}")
-        else:
-            st.info("🎯 Start solving problems to earn achievements!")
-        
-        # Study reminder
-        if streak == 0:
-            st.warning("💡 Don't break your streak! Solve a problem today!")
-        elif streak >= 1:
-            st.success(f"🔥 Amazing! {streak}-day streak! Keep it up!")
-    
-    except Exception as e:
-        st.error(f"Error loading learning motivation: {str(e)}")
-        st.info("🎯 Start solving problems to see your progress!")
-
 # Add daily learning tip
 def show_daily_learning_tip():
     """Show daily learning tip and motivation"""
@@ -570,431 +470,522 @@ def show_daily_learning_tip():
     daily_quote = quotes[today % len(quotes)]
     st.markdown(f"*\"{daily_quote}\"*")
 
-# Add this to the dashboard after learning motivation
-def show_dashboard(system):
-    """Mobile-friendly dashboard"""
-    st.markdown("""
-    <div class="main-header">
-        <h1>🎯 DSA Mastery Dashboard</h1>
-        <p class="mobile-text">Track your progress and start solving</p>
-    </div>
+def get_current_page():
+    """Get current page from query parameters"""
+    try:
+        return st.query_params.get("page", "dashboard")
+    except:
+        # Fallback in case query_params is not available
+        return "dashboard"
+
+def show_top_progress_bar(system):
+    """Show a minimal progress bar at the very top"""
+    total_problems = len(system.neetcode)
+    completed = len([p for p in system.neetcode if str(p.get("status", "")).lower() == "completed"])
+    progress_percent = (completed / total_problems) * 100
+    
+    st.markdown(f"""
+        <div style="position: fixed; top: 0; left: 0; right: 0; z-index: 1000; padding: 0;">
+            <div style="height: 3px; background: #141414; width: 100%;">
+                <div style="height: 100%; width: {progress_percent}%; background: linear-gradient(90deg, #4CAF50, #45a049); transition: width 0.5s ease;"></div>
+            </div>
+            <div style="position: absolute; right: 10px; top: 5px; color: #4CAF50; font-size: 0.8rem; font-weight: 500;">
+                {progress_percent:.1f}% ({completed}/{total_problems})
+            </div>
+        </div>
     """, unsafe_allow_html=True)
+
+def show_navigation():
+    """Show the top navigation bar"""
+    current_page = st.session_state.get('current_page', 'dashboard')
     
-    # Learning motivation
-    show_learning_motivation(system)
+    # Navigation items with their icons and labels
+    nav_items = [
+        ('dashboard', '🏠', 'Dashboard'),
+        ('solve', '💻', 'Solve'),
+        ('browse', '📚', 'Browse'),
+        ('review', '📝', 'Review'),
+        ('study', '🎓', 'Study')
+    ]
     
-    # Daily learning tip
-    show_daily_learning_tip()
+    # Create columns for navigation items
+    cols = st.columns([2] + [1] * len(nav_items))
     
-    # PC Auto-Sync Status
-    if not os.environ.get('STREAMLIT_SERVER_HEADLESS', False):
-        st.markdown("### 💻 PC Auto-Sync Status")
-        col1, col2, col3 = st.columns(3)
-        
+    # Logo in first column
+    with cols[0]:
+        if st.button("🎯 DSA Mastery", use_container_width=True):
+            st.session_state.current_page = 'dashboard'
+            st.rerun()
+    
+    # Navigation items in remaining columns
+    for i, (page, icon, label) in enumerate(nav_items):
+        with cols[i + 1]:
+            if st.button(f"{icon} {label}", use_container_width=True, type="secondary" if current_page != page else "primary"):
+                st.session_state.current_page = page
+                st.rerun()
+
+def show_progress_section(system):
+    """Show detailed progress tracking and gamification"""
+    
+    # Get progress data
+    total_problems = len(system.neetcode)
+    completed = len([p for p in system.neetcode if str(p.get("status", "")).lower() == "completed"])
+    attempted = len([p for p in system.neetcode if str(p.get("status", "")).lower() == "attempted"])
+    
+    # Calculate completion rate and predict completion
+    days_active = (datetime.now() - datetime.fromisoformat(system.progress["stats"]["last_run"])).days + 1
+    avg_problems_per_day = completed / max(days_active, 1)
+    remaining_problems = total_problems - completed
+    days_to_complete = int(remaining_problems / max(avg_problems_per_day, 0.1))
+    completion_date = datetime.now() + timedelta(days=days_to_complete)
+    progress_percent = (completed / total_problems) * 100
+
+    # Overall Progress Container
+    with st.container():
+        # Title and percentage
+        col1, col2 = st.columns([3, 1])
         with col1:
-            # Check if local folders exist
-            local_notes = Path("local_notes")
-            local_flashcards = Path("local_flashcards")
-            notebooklm_export = Path("notebooklm_export")
-            
-            if local_notes.exists():
-                note_count = len(list(local_notes.rglob("*.md")))
-                st.metric("📝 Local Notes", f"{note_count} files")
-            else:
-                st.metric("📝 Local Notes", "Not synced")
-        
+            st.markdown("### 📊 Overall Progress")
         with col2:
-            if local_flashcards.exists():
-                flashcard_count = len(list(local_flashcards.rglob("*.csv")))
-                st.metric("📊 Local Flashcards", f"{flashcard_count} files")
-            else:
-                st.metric("📊 Local Flashcards", "Not synced")
+            st.markdown(f"<h3 style='text-align: right; color: #4CAF50;'>{progress_percent:.1f}%</h3>", unsafe_allow_html=True)
         
-        with col3:
-            if notebooklm_export.exists():
-                notebooklm_count = len(list(notebooklm_export.rglob("*.md")))
-                st.metric("📚 NotebookLM Export", f"{notebooklm_count} files")
-            else:
-                st.metric("📚 NotebookLM Export", "Not synced")
+        # Progress bar
+        st.progress(progress_percent / 100)
         
-        # Auto-sync info
-        st.info("""
-        **🔄 PC Auto-Sync Active**
-        - Automatically syncs from GitHub every 5 minutes
-        - Updates local notes and flashcards
-        - Exports to NotebookLM format
-        - No manual intervention required
-        """)
-        
-        # NotebookLM Integration Status
-        st.markdown("### 📚 NotebookLM Integration Status")
+        # Stats grid
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            # Google Drive sync
-            if os.getenv('GDRIVE_FOLDER_ID'):
-                st.metric("☁️ Google Drive", "✅ Active")
-            else:
-                st.metric("☁️ Google Drive", "❌ Not configured")
+            st.markdown("""
+            <div style='background-color: #1E1E2F; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #383850;'>
+                <div style='color: #B0B0B0; font-size: 0.9rem;'>Completed</div>
+                <div style='color: #4CAF50; font-size: 1.5rem; font-weight: bold;'>{}/{}</div>
+            </div>
+            """.format(completed, total_problems), unsafe_allow_html=True)
         
         with col2:
-            # Webhook sync
-            if os.getenv('NOTEBOOKLM_WEBHOOK_URL'):
-                st.metric("🔗 Webhook", "✅ Active")
-            else:
-                st.metric("🔗 Webhook", "❌ Not configured")
+            st.markdown("""
+            <div style='background-color: #1E1E2F; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #383850;'>
+                <div style='color: #B0B0B0; font-size: 0.9rem;'>Current Streak</div>
+                <div style='color: #4CAF50; font-size: 1.5rem; font-weight: bold;'>{}d</div>
+            </div>
+            """.format(system.progress["stats"].get("streak", 0)), unsafe_allow_html=True)
         
         with col3:
-            # Local folder sync
-            st.metric("📁 Local Folder", "✅ Active")
+            st.markdown("""
+            <div style='background-color: #1E1E2F; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #383850;'>
+                <div style='color: #B0B0B0; font-size: 0.9rem;'>Avg. per Day</div>
+                <div style='color: #4CAF50; font-size: 1.5rem; font-weight: bold;'>{:.1f}</div>
+            </div>
+            """.format(avg_problems_per_day), unsafe_allow_html=True)
         
         with col4:
-            # API sync
-            if os.getenv('NOTEBOOKLM_API_KEY'):
-                st.metric("🔌 API", "✅ Active")
-            else:
-                st.metric("🔌 API", "❌ Not configured")
-        
-        # NotebookLM auto-sync info
-        st.success("""
-        **📚 NotebookLM Zero-Manual Integration Active**
-        - File watcher monitoring notebooklm_export folder
-        - Auto-uploading to all configured sync methods
-        - Real-time sync with zero manual work
-        - NotebookLM automatically has your notes!
-        """)
-    
-    st.markdown('<div class="section-header">📅 Today’s Problem</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtext">Solve today’s recommended problem to keep your streak going!</div>', unsafe_allow_html=True)
-    # Today's problem
-    today_problem = system.get_today_problem()
-    if today_problem:
-        pattern, problem = today_problem
-        st.subheader(f"📅 Today's Problem")
-        
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            # Use helper function to get LeetCode URL
-            leetcode_url = get_leetcode_url(problem)
-            
-            st.markdown(f"""
-            <div class="problem-card">
-                <strong style='font-size:1.1rem'>{problem['id']} - {problem['title']}</strong><br>
-                <small>Pattern: <b>{pattern}</b> | Difficulty: <b>{problem['difficulty']}</b></small><br>
-                <a href="{leetcode_url}" target="_blank">🔗 Solve on LeetCode</a>
+            st.markdown("""
+            <div style='background-color: #1E1E2F; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #383850;'>
+                <div style='color: #B0B0B0; font-size: 0.9rem;'>Days Left</div>
+                <div style='color: #4CAF50; font-size: 1.5rem; font-weight: bold;'>{}</div>
             </div>
-            """, unsafe_allow_html=True)
+            """.format(days_to_complete), unsafe_allow_html=True)
         
-        with col2:
-            if st.button("🚀 Start Solving Now", key="start_today", use_container_width=True, help="Go to solve tab", type="primary"):
-                st.session_state.page = "solve"
-                st.session_state.current_problem = problem
-                st.rerun()
+        # Completion date
+        st.markdown("""
+        <div style='text-align: center; margin-top: 15px; color: #B0B0B0; font-size: 0.9rem;'>
+            At your current pace, you'll complete all problems by 
+            <span style='color: #4CAF50;'>{}</span>
+        </div>
+        """.format(completion_date.strftime('%B %d, %Y')), unsafe_allow_html=True)
     
-    st.markdown('<div class="section-header">📊 Progress Overview</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtext">Track your DSA journey and see your achievements at a glance.</div>', unsafe_allow_html=True)
-    # Progress overview
+    # Pattern Progress
+    pattern_progress = {}
+    for problem in system.neetcode:
+        pattern = problem.get("pattern", "Other")
+        if pattern not in pattern_progress:
+            pattern_progress[pattern] = {"total": 0, "completed": 0}
+        pattern_progress[pattern]["total"] += 1
+        if str(problem.get("status", "")).lower() == "completed":
+            pattern_progress[pattern]["completed"] += 1
     
-    # Get progress data - handle case where get_all_problems might not exist
-    try:
-        all_problems = system.get_all_problems()
-        total_problems = len(all_problems)
-        completed = len([p for p in all_problems if str(p.get("status", "")).lower() == "completed"])
-        skipped = len([p for p in all_problems if str(p.get("status", "")).lower() == "skipped"])
-    except AttributeError:
-        # Fallback to neetcode attribute if get_all_problems doesn't exist
-        all_problems = system.neetcode
-        total_problems = len(all_problems)
-        completed = len([p for p in all_problems if str(p.get("status", "")).lower() == "completed"])
-        skipped = len([p for p in all_problems if str(p.get("status", "")).lower() == "skipped"])
+    # Sort patterns by completion percentage
+    sorted_patterns = sorted(
+        pattern_progress.items(),
+        key=lambda x: (x[1]["completed"] / x[1]["total"]) if x[1]["total"] > 0 else 0,
+        reverse=True
+    )
     
-    col1, col2, col3 = st.columns(3)
+    with st.expander("📈 Pattern-wise Progress", expanded=False):
+        st.markdown("""
+            <div style='color: #B0B0B0; font-size: 0.9rem; margin-bottom: 15px;'>
+                Track your mastery across different DSA patterns
+            </div>
+            <div style='display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;'>
+        """, unsafe_allow_html=True)
+        
+        for pattern, stats in sorted_patterns:
+            if pattern != "Other":
+                completion = (stats["completed"] / stats["total"]) * 100
+                st.markdown(f"""
+                    <div style='background-color: #1E1E2F; padding: 10px; border-radius: 8px; border: 1px solid #383850; text-align: center;'>
+                        <div style='color: white; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' title='{pattern}'>{pattern}</div>
+                        <div style='color: #4CAF50; font-size: 1.2rem; font-weight: bold; margin: 5px 0;'>{completion:.0f}%</div>
+                        <div style='background-color: #141414; height: 4px; border-radius: 2px; margin: 5px 0;'>
+                            <div style='width: {completion}%; height: 100%; background: linear-gradient(90deg, #4CAF50, #45a049); border-radius: 2px;'></div>
+                        </div>
+                        <div style='color: #B0B0B0; font-size: 0.7rem;'>{stats["completed"]}/{stats["total"]}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+
+def show_dashboard(system):
+    """Show the main dashboard with progress, daily question, and system status"""
+    
+    # Show today's problem
+    st.markdown("### 🎯 Today's Problem")
+    show_todays_problem(system)
+    
+    # Show motivational quote
+    st.markdown("### 💭 Daily Motivation")
+    show_daily_quote()
+    
+    # Show progress section (includes pattern progress in expander)
+    show_progress_section(system)
+    
+    # Show daily learning tip
+    st.markdown("### 💡 Daily Tip")
+    show_daily_learning_tip()
+
+def show_todays_problem(system):
+    """Show today's recommended problem"""
+    problem = system.get_next_unsolved_in_pattern(system.get_current_pattern())
+    if problem:
+        st.markdown(f"""
+            <div class="neon-card">
+                <div style="color: #4CAF50; font-size: 16px; margin-bottom: 10px;">Recommended Problem:</div>
+                <div style="color: white; font-size: 20px; margin-bottom: 10px;">{problem['title']}</div>
+                <div style="color: #888; font-size: 14px; margin-bottom: 15px;">Pattern: {problem.get('pattern', 'Unknown')}</div>
+                <div style="display: flex; gap: 10px;">
+                    <a href="{problem['url']}" target="_blank" style="text-decoration: none;">
+                        <div style="background: #4CAF50; color: white; padding: 8px 15px; border-radius: 5px; display: inline-block;">
+                            Solve on LeetCode
+                        </div>
+                    </a>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.info("No problems available. You might have completed all problems in the current pattern!")
+
+def show_daily_quote():
+    """Show an inspirational quote"""
+    quotes = [
+        {
+            "text": "The only way to learn a new programming language is by writing programs in it.",
+            "author": "Dennis Ritchie"
+        },
+        {
+            "text": "Sometimes it's better to leave something alone, to pause, and that's very true of programming.",
+            "author": "Joyce Wheeler"
+        },
+        {
+            "text": "Testing leads to failure, and failure leads to understanding.",
+            "author": "Burt Rutan"
+        },
+        {
+            "text": "The best error message is the one that never shows up.",
+            "author": "Thomas Fuchs"
+        },
+        {
+            "text": "The most damaging phrase in the language is 'We've always done it this way.'",
+            "author": "Grace Hopper"
+        }
+    ]
+    quote = random.choice(quotes)
+    st.markdown(f"""
+        <div class="neon-card">
+            <div style="color: white; font-size: 16px; margin-bottom: 10px;">"{quote['text']}"</div>
+            <div style="color: #4CAF50; font-size: 14px;">- {quote['author']}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+def show_system_status():
+    """Show system integration status"""
+    st.markdown("""
+        <div class="neon-card">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                <div style="text-align: center;">
+                    <div style="color: #4CAF50; font-size: 24px;">✓</div>
+                    <div style="color: white; font-size: 16px;">Obsidian</div>
+                    <div style="color: #888; font-size: 12px;">Connected</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="color: #4CAF50; font-size: 24px;">✓</div>
+                    <div style="color: white; font-size: 16px;">Anki</div>
+                    <div style="color: #888; font-size: 12px;">Synced</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="color: #4CAF50; font-size: 24px;">✓</div>
+                    <div style="color: white; font-size: 16px;">NotebookLM</div>
+                    <div style="color: #888; font-size: 12px;">Ready</div>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+def show_solve_interface():
+    """A clean, focused interface for solving problems, with a two-column layout."""
+    st.header("Solve Problem")
+
+    # --- Data Loading and State Management ---
+    system = get_system()
+    ordered_patterns = DSA_LEARNING_ORDER
+    
+    # Initialize session state for selected problem and pattern
+    if 'selected_pattern' not in st.session_state:
+        st.session_state.selected_pattern = system.get_current_pattern() or ordered_patterns[0]
+    if 'selected_problem' not in st.session_state:
+        st.session_state.selected_problem = None
+
+    # --- Layout: Two Columns ---
+    col1, col2 = st.columns([0.8, 2])
+
+    # --- Column 1: Problem List ---
     with col1:
-        st.metric("Total Problems", total_problems)
-    with col2:
-        st.metric("Completed", completed)
-    with col3:
-        st.metric("Skipped", skipped)
-    
-    # Progress bar
-    progress = (completed / total_problems * 100) if total_problems > 0 else 0
-    st.progress(progress / 100)
-    st.caption(f"Overall Progress: {progress:.1f}%")
-    
-    st.markdown('<div class="section-header">⚡ Quick Actions</div>', unsafe_allow_html=True)
-    # Quick actions
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📝 Solve Problems", key="quick_solve", use_container_width=True, help="Practice new problems", type="primary"):
-            st.session_state.page = "solve"
-            st.rerun()
-    with col2:
-        if st.button("📚 Study All Notes", key="quick_study", use_container_width=True, help="Review all notes", type="primary"):
-            st.session_state.page = "study"
-            st.rerun()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🔍 Browse Problems", key="quick_browse", use_container_width=True, help="Browse all problems", type="primary"):
-            st.session_state.page = "browser"
-            st.rerun()
-    with col2:
-        if st.button("📖 Review Notes", key="quick_review", use_container_width=True, help="Review your notes", type="primary"):
-            st.session_state.page = "review"
+        st.subheader("Problems")
+        
+        # Pattern Selector
+        selected_pattern_from_ui = st.selectbox(
+            "Select Pattern:",
+            options=ordered_patterns,
+            index=ordered_patterns.index(st.session_state.selected_pattern) if st.session_state.selected_pattern in ordered_patterns else 0
+        )
+        
+        # If pattern changes, update state and rerun
+        if selected_pattern_from_ui != st.session_state.selected_pattern:
+            st.session_state.selected_pattern = selected_pattern_from_ui
+            st.session_state.selected_problem = None # Reset problem when pattern changes
+            system.set_current_pattern(selected_pattern_from_ui)
             st.rerun()
 
-def show_solve_interface(system):
-    """Mobile-friendly solve interface"""
-    st.markdown("""
-    <div class="main-header">
-        <h1>💻 Solve Problems</h1>
-        <p class="mobile-text">Practice DSA with AI guidance</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Compact pattern selector
-    all_patterns = system.get_learning_order_patterns()
-    selected_pattern = st.selectbox("📂 Pattern", all_patterns, 
-                                   index=all_patterns.index(st.session_state.selected_pattern) if st.session_state.selected_pattern in all_patterns else 0, 
-                                   key="solve_pattern_select")
-    st.session_state.selected_pattern = selected_pattern
-    
-    # Compact today's problem
-    pattern, today_problem = system.get_today_problem()
-    if not today_problem or not (isinstance(today_problem, dict) and today_problem.get("pattern") == selected_pattern):
-        st.warning("No problem loaded for this pattern. Click below to load today's problem.")
-        if st.button("🔄 Load Today's Problem", key="load_today_problem", use_container_width=True):
-            st.session_state.page = "solve"
-            st.session_state.current_problem = None
-            st.rerun()
-        return
-    
-    st.subheader(f"🎯 {today_problem['id']} - {today_problem['title']}")
-    st.markdown(f"**{today_problem['difficulty']}** • {today_problem['pattern']}")
-    
-    # Add LeetCode link using helper function
-    leetcode_url = get_leetcode_url(today_problem)
-    st.markdown(f"[🔗 Solve on LeetCode]({leetcode_url})")
-    
-    # Compact problem description
-    with st.expander("📝 Problem Description", expanded=False):
-        st.markdown(today_problem.get("description", "No description available"))
-    
-    # Clear code paste label
-    st.subheader("💻 Paste your code here")
-    user_code = st.text_area("Paste your code here:", value=st.session_state.get("user_code", ""), 
-                            height=200, key="code_input", 
-                            placeholder="Paste or write your solution here...")
-    st.session_state.user_code = user_code
-    
-    # Action buttons: Explain Solution and Submit Solution
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🤖 Explain Solution", key="explain_solution", use_container_width=True):
-            if user_code.strip():
-                with st.spinner("Analyzing and explaining your solution..."):
-                    analysis = system.analyze_solution(today_problem, user_code)
-                    st.session_state.analysis = analysis
-                    st.session_state.code_explanation = generate_code_explanation(today_problem, user_code, "python")
-            else:
-                st.warning("Please paste or write your code first.")
+        st.divider()
+
+        # Get and display problems for the selected pattern
+        problems_in_pattern = sorted(system.get_problems_by_pattern(st.session_state.selected_pattern), key=lambda p: int(''.join(filter(str.isdigit, str(p.get('id', '0'))))))
+
+        if not problems_in_pattern:
+            st.warning("No problems found for this pattern.")
+        else:
+            for problem in problems_in_pattern:
+                status = str(problem.get('status', '')).lower()
+                status_emoji = '✅' if status == 'completed' else '⏳'
+                btn_col, link_col = st.columns([3, 1])
+                with btn_col:
+                    if st.button(f"{problem['id']}: {problem['title']} {status_emoji}", key=f"problem_{problem['id']}", use_container_width=True, type="secondary"):
+                    st.session_state.selected_problem = problem
+                    st.rerun()
+                with link_col:
+                    st.link_button("🔗", problem['url'], use_container_width=True)
+
+    # --- Column 2: Code Editor ---
     with col2:
-        if st.button("✅ Submit Solution", key="submit_solution", use_container_width=True):
-            if user_code.strip():
-                system.mark_problem_status(today_problem["id"], "completed")
-                st.success("Problem marked as completed!")
-                st.rerun()
-            else:
-                st.warning("Please paste or write your code first.")
-    
-    # Compact analysis results
-    if st.session_state.analysis:
-        with st.expander("📊 Analysis Results", expanded=False):
-            display_analysis_results(st.session_state.analysis, "python")
-    
-    # Compact code explanation
-    if st.session_state.code_explanation:
-        with st.expander("💡 Code Explanation", expanded=False):
-            display_code_explanation(st.session_state.code_explanation)
-    
-    # Compact note generation
-    if st.session_state.analysis:
-        note_md, flashcards = system.generate_dsa_note(today_problem, user_code)
-        st.session_state[f"flashcards_{today_problem['id']}"] = flashcards
-        st.session_state[f"note_md_{today_problem['id']}"] = note_md
-        
-        with st.expander("📝 Generated Note", expanded=False):
-            st.markdown(note_md, unsafe_allow_html=True)
+        st.subheader("Code Editor")
+
+        if st.session_state.selected_problem is None:
+            st.info("Select a problem from the list on the left to start coding.")
+        else:
+            problem = st.session_state.selected_problem
+            st.markdown(f"**Current Problem: [{problem['title']}]({problem['url']})**")
             
-            if st.button("💾 Save Note", key=f"save_note_{today_problem['id']}", use_container_width=True):
-                result = system.save_dsa_note_and_flashcards(today_problem, note_md, st.session_state.get(f"flashcards_{today_problem['id']}", []))
-                st.success("✅ Note saved!")
-                
-                # Cloud sync integration
-                if 'cloud_sync' in locals() and cloud_sync:
+            # Language Selector - default to Java
+            languages = ["java", "python", "javascript", "cpp", "c"]
+            selected_language = st.selectbox("Language:", options=languages, index=0)
+            
+            # Code Editor
+            code_template = get_language_template(selected_language)
+            
+            if 'code_editor_value' not in st.session_state:
+                st.session_state.code_editor_value = code_template
+            
+            # When problem or language changes, reset the code
+            if st.session_state.get('current_problem_id') != problem['id'] or st.session_state.get('current_language') != selected_language:
+                st.session_state.code_editor_value = code_template
+                st.session_state.current_problem_id = problem['id']
+                st.session_state.current_language = selected_language
+
+            st.markdown('<div class="code-editor-container">', unsafe_allow_html=True)
+            code = st_monaco(
+                value=st.session_state.code_editor_value,
+                language=selected_language,
+                height=400
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # Action Buttons
+            st.divider()
+            b_col1, b_col2, b_col3 = st.columns(3)
+            with b_col1:
+                if st.button("Generate Notes", use_container_width=True):
+                    prompt = f"""
+                    Generate detailed DSA notes for LeetCode problem: {problem['title']} (Pattern: {problem['pattern']})
+                    Follow this exact structure with small, well-formatted headings:
+                    ## Problem Statement and Examples
+                    [Detailed problem description and 2-3 examples]
+                    ## Hints
+                    [3-5 progressive hints]
+                    ## Intuition
+                    [Clear explanation of core idea and why it works]
+                    ## General Solution for Pattern
+                    [Broad approach for {problem['pattern']} pattern, with common use cases]
+                    ## Brute-Force Approach
+                    [Step-by-step brute force solution with complexity analysis]
+                    ## Optimal Solution Breakdown
+                    [Detailed breakdown of best solution, including time/space complexity, edge cases, and optimizations]
+                    ## Code (Java)
+                    ```java
+                    [Optimal Java code with thorough inline comments explaining each part]
+                    ```
+                    Keep AI-generated parts as one-line summaries. Add more prompting guidance in notes for better understanding. Ensure readability with smaller sections.
+                    """
                     try:
-                        filename = f"{today_problem['id']} - {today_problem['title']}.md"
-                        if cloud_sync.sync_note_to_cloud(note_md, filename):
-                            st.success("☁️ Synced to cloud!")
-                        
-                        flashcards = st.session_state.get(f"flashcards_{today_problem['id']}", [])
-                        if flashcards:
-                            deck_name = f"DSA_{today_problem['pattern']}"
-                            if cloud_sync.sync_flashcards_to_anki(flashcards, deck_name):
-                                st.success("📚 Synced to Anki!")
+                        notes = call_ai_api(prompt)
+                        st.session_state.generated_notes = notes
+                        st.rerun()  # Rerun to show notes below
                     except Exception as e:
-                        st.warning(f"Cloud sync: {e}")
-            
-            # Mobile download buttons
-            st.markdown("---")
-            st.markdown("#### 📱 Mobile Downloads")
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                if st.button("📥 Download Note", key=f"download_note_{today_problem['id']}", use_container_width=True):
-                    try:
-                        import base64
-                        b64 = base64.b64encode(note_md.encode()).decode()
-                        href = f'<a href="data:file/md;base64,{b64}" download="{today_problem["title"].replace(" ", "_")}.md">📥 Download Note</a>'
-                        st.markdown(href, unsafe_allow_html=True)
-                        st.success("✅ Note ready for download!")
-                    except Exception as e:
-                        st.error(f"Download error: {e}")
-            
-            with col2:
-                if st.button("📊 Export Flashcards", key=f"export_flashcards_{today_problem['id']}", use_container_width=True):
-                    try:
-                        import pandas as pd
-                        df = pd.DataFrame(flashcards)
-                        csv = df.to_csv(index=False)
-                        b64 = base64.b64encode(csv.encode()).decode()
-                        href = f'<a href="data:file/csv;base64,{b64}" download="{today_problem["title"].replace(" ", "_")}_flashcards.csv">📊 Download Flashcards</a>'
-                        st.markdown(href, unsafe_allow_html=True)
-                        st.success("✅ Flashcards ready for download!")
-                    except Exception as e:
-                        st.error(f"Export error: {e}")
-            
-            with col3:
-                if st.button("📋 Copy to Clipboard", key=f"copy_note_{today_problem['id']}", use_container_width=True):
-                    try:
-                        st.code(note_md)
-                        st.success("✅ Note copied! Paste into Obsidian on PC")
-                    except Exception as e:
-                        st.error(f"Copy error: {e}")
-            
-            # Cloud upload buttons
-            st.markdown("#### ☁️ Direct Cloud Upload")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if st.button("🐙 Upload to GitHub", key=f"github_upload_{today_problem['id']}", use_container_width=True):
-                    try:
-                        from cloud_sync import CloudSync
-                        cloud_sync = CloudSync()
-                        filename = f"{today_problem['id']} - {today_problem['title']}.md"
-                        success, message = cloud_sync.upload_note_to_github(note_md, filename, today_problem['pattern'])
-                        if success:
-                            st.success(message)
-                        else:
-                            st.warning(f"GitHub upload: {message}")
-                    except Exception as e:
-                        st.error(f"GitHub upload error: {e}")
-            
-            with col2:
-                if st.button("📊 Upload Flashcards", key=f"upload_flashcards_{today_problem['id']}", use_container_width=True):
-                    try:
-                        from cloud_sync import CloudSync
-                        cloud_sync = CloudSync()
-                        filename = f"{today_problem['id']} - {today_problem['title']}_flashcards.csv"
-                        success, message = cloud_sync.upload_flashcards_to_github(flashcards, filename, today_problem['title'])
-                        if success:
-                            st.success(message)
-                        else:
-                            st.warning(f"Flashcard upload: {message}")
-                    except Exception as e:
-                        st.error(f"Flashcard upload error: {e}")
-            
-            # NotebookLM Export
-            st.markdown("#### 📚 NotebookLM Export")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if st.button("📚 Export to NotebookLM", key=f"notebooklm_export_{today_problem['id']}", use_container_width=True):
-                    try:
-                        from notebooklm_export import NotebookLMExporter
-                        exporter = NotebookLMExporter()
-                        notebooklm_content = exporter.parse_note_for_notebooklm(note_md, today_problem['pattern'], f"{today_problem['id']} - {today_problem['title']}.md")
-                        
-                        # Save to NotebookLM folder
-                        output_path = Path("notebooklm_export") / f"{today_problem['pattern']}_{today_problem['id']} - {today_problem['title']}.md"
-                        output_path.parent.mkdir(exist_ok=True)
-                        with open(output_path, 'w', encoding='utf-8') as f:
-                            f.write(notebooklm_content)
-                        
-                        st.success(f"✅ Exported to NotebookLM: {output_path}")
-                    except Exception as e:
-                        st.error(f"NotebookLM export error: {e}")
-            
-            with col2:
-                if st.button("🔄 Auto-Sync All", key=f"auto_sync_{today_problem['id']}", use_container_width=True):
-                    try:
-                        # Upload to GitHub
-                        from cloud_sync import CloudSync
-                        cloud_sync = CloudSync()
-                        filename = f"{today_problem['id']} - {today_problem['title']}.md"
-                        note_success, note_message = cloud_sync.upload_note_to_github(note_md, filename, today_problem['pattern'])
-                        # Upload flashcards
-                        flashcard_filename = f"{today_problem['id']} - {today_problem['title']}_flashcards.csv"
-                        flashcard_success, flashcard_message = cloud_sync.upload_flashcards_to_github(flashcards, flashcard_filename, today_problem['title'])
-                        # Export to NotebookLM
-                        from notebooklm_export import NotebookLMExporter
-                        exporter = NotebookLMExporter()
-                        notebooklm_content = exporter.parse_note_for_notebooklm(note_md, today_problem['pattern'], f"{today_problem['id']} - {today_problem['title']}.md")
-                        output_path = Path("notebooklm_export") / f"{today_problem['pattern']}_{today_problem['id']} - {today_problem['title']}.md"
-                        output_path.parent.mkdir(exist_ok=True)
-                        with open(output_path, 'w', encoding='utf-8') as f:
-                            f.write(notebooklm_content)
-                        st.success("✅ Auto-sync complete!")
-                    except Exception as e:
-                        st.error(f"Auto-sync error: {e}")
-        
-        # Compact AI chat
-        with st.expander("🤖 AI Chat", expanded=False):
-            user_query = st.text_input("Ask AI...", key=f"chat_{today_problem['id']}", placeholder="Type your question...")
-            if st.button("Ask", key=f"askai_{today_problem['id']}", use_container_width=True):
-                if user_query.strip():
-                    with st.spinner("AI thinking..."):
+                        st.error(f"Failed to generate notes: {e}")
+
+            # Editable notes
+            if 'generated_notes' in st.session_state and st.session_state.generated_notes:
+                edited_notes = st.text_area("Edit Notes", value=st.session_state.generated_notes, height=300)
+                st.session_state.generated_notes = edited_notes  # Update with edits
+
+                action_cols = st.columns(2)
+                with action_cols[0]:
+                    if st.button("Save Notes", use_container_width=True):
                         try:
-                            note_md = st.session_state.get(f"note_md_{today_problem['id']}", "")
-                            chat_prompt = f"User question: {user_query}\n\nProblem: {today_problem['title']}\n\nNote: {note_md}\n\nCode: {user_code}"
-                            ai_response = call_ai_api(chat_prompt)
-                            st.session_state[f"chat_resp_{today_problem['id']}"] = ai_response
+                            # Save to file
+                            pattern = problem['pattern'].replace(' ', '_').lower()
+                            title = problem['title'].replace(' ', '_').lower()
+                            notes_dir = Path('notes') / pattern
+                            notes_dir.mkdir(parents=True, exist_ok=True)
+                            notes_path = notes_dir / f"{problem['id']}_{title}.md"
+                            with open(notes_path, 'w', encoding='utf-8') as f:
+                                f.write(edited_notes)
+                            st.success(f"✅ Notes saved to {notes_path}")
+
+                            # Sync to cloud
+                            cloud_sync = CloudSync()
+                            cloud_sync.sync_notes_to_github()  # Or GDrive if configured
+
+                            # Export to NotebookLM
+                            from notebooklm_export import NotebookLMExporter
+                            exporter = NotebookLMExporter()
+                            exporter.export_note_to_notebooklm(notes_path)
+
+                            # Generate Anki flashcards
+                            from anki_manager import create_flashcards_from_notes
+                            flashcards = extract_flashcards_from_notes(edited_notes)  # Assume helper function
+                            create_flashcards(flashcards, deck_name=problem['pattern'])
+                            st.success("✅ Flashcards generated and ready for Anki")
                         except Exception as e:
-                            st.session_state[f"chat_resp_{today_problem['id']}"] = f"AI error: {e}"
-            
-            chat_resp = st.session_state.get(f"chat_resp_{today_problem['id']}")
-            if chat_resp:
-                st.markdown(f"**AI:** {chat_resp}")
-    
-    # Compact problem list
-    st.subheader(f"📋 {selected_pattern} Problems")
-    problems = system.get_problems_by_pattern(selected_pattern)
-    for p in problems:
-        status = str(p.get("status", "")).lower()
-        status_emoji = "✅" if status == "completed" else ("⏭️" if status == "skipped" else "⏳")
-        
-        col1, col2, col3 = st.columns([3, 1, 1])
-        with col1:
-            st.markdown(f"{status_emoji} **{p['id']} - {p['title']}**")
-        with col2:
-            st.markdown(f"`{p['difficulty']}`")
-        with col3:
-            if st.button("Notes", key=f"notes_{p['id']}", use_container_width=True):
-                # Show notes in modal
-                note_content = st.session_state.get(f"note_md_{p['id']}", "No notes available")
-                st.markdown(f"**Notes for {p['id']}:**")
-                st.markdown(note_content)
+                            st.error(f"Failed to save/sync: {e}")
+
+                with action_cols[1]:
+                    if st.button("Mark as Done", use_container_width=True, type="primary"):
+                        system.mark_problem_completed(problem['id'])
+                        st.success(f"Marked {problem['title']} as done!")
+                        st.session_state.generated_notes = None
+
+            # Full-width notes section below columns
+            if 'generated_notes' in st.session_state and st.session_state.generated_notes:
+                with st.expander("### Generated Notes", expanded=True):
+                    st.markdown('<div class="notes-container">', unsafe_allow_html=True)
+                    st.markdown(st.session_state.generated_notes)
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+            with b_col2:
+                if st.button("Analyze Code", use_container_width=True):
+                    prompt = f"""
+                    Analyze this code for LeetCode problem {problem['title']}:
+                    ```{selected_language}
+                    {st.session_state.code_editor_value}
+                    ```
+                    Provide:
+                    - Correctness
+                    - Approach summary
+                    - Complexity
+                    - Mistakes
+                    - Fixed code
+                    - Annotated code
+                    - Flashcards
+                    """
+                    try:
+                        analysis = call_ai_api(prompt, parse_json=True)  # Assuming it returns JSON
+                        display_analysis_results(analysis, selected_language)
+                    except Exception as e:
+                        st.error(f"Failed to analyze code: {e}")
+            with b_col3:
+                if st.button("Generate AI Solution", use_container_width=True):
+                    prompt = f"Generate optimal {selected_language} solution code for LeetCode problem: {problem['title']}"
+                    try:
+                        ai_code = call_ai_api(prompt)
+                        st.session_state.code_editor_value = ai_code
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to generate AI solution: {e}")
+
+            # Add Mark as Done button
+            if 'generated_notes' in st.session_state and st.session_state.generated_notes:
+                if st.button("Mark as Done", use_container_width=True, type="primary"):
+                    # TODO: Integrate with system to mark problem as completed
+                    system.mark_problem_completed(problem['id'])
+                    st.success(f"Marked {problem['title']} as done!")
+                    st.session_state.generated_notes = None  # Clear notes after marking
+
+            # Daily Review enhancement
+            if st.button("Daily Review", use_container_width=True):
+                # Load random flashcards from saved notes
+                flashcards = load_random_flashcards()  # Assume helper function
+                if flashcards:
+                    st.markdown("### Daily Review Flashcards")
+                    for card in flashcards[:5]:  # Show 5 random
+                        with st.expander(card['front']):
+                            st.write(card['back'])
+                else:
+                    st.info("No flashcards available yet.")
+
+def get_language_template(language):
+    """Return template code for the selected language"""
+    templates = {
+        "java": """public class Solution {
+    public static void main(String[] args) {
+        // Your solution here
+    }
+}""",
+        "python": """def solution():
+    # Your solution here
+    pass
+
+if __name__ == "__main__":
+    solution()""",
+        "javascript": """function solution() {
+    // Your solution here
+}
+
+solution();""",
+        "cpp": """#include <iostream>
+using namespace std;
+
+int main() {
+    // Your solution here
+    return 0;
+}""",
+        "c": """#include <stdio.h>
+
+int main() {
+    // Your solution here
+    return 0;
+}"""
+    }
+    return templates.get(language, "// Start coding here")
 
 # Compact problem browser
 def show_problem_browser(system):
@@ -1206,174 +1197,275 @@ def show_study_mode(system):
                     except Exception as e:
                         st.error(f"NotebookLM export error: {e}")
 
-# Floating AI Chatbox (persistent on all pages)
 def show_floating_ai_chatbox():
-    import streamlit as st
-    from ai_client import call_ai_api
-    import time
+    """Show a Cursor-style floating AI chatbox for DSA-related queries"""
+    # Initialize chat state
+    if 'chat_visible' not in st.session_state:
+        st.session_state.chat_visible = False
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    if 'chat_input' not in st.session_state:
+        st.session_state.chat_input = ""
     
-    # Use session state for chat history
-    if 'ai_chat_history' not in st.session_state:
-        st.session_state.ai_chat_history = []
-    if 'ai_chatbox_open' not in st.session_state:
-        st.session_state.ai_chatbox_open = False
+    # Chat toggle button
+    st.markdown(
+        f"""
+        <div class="floating-chat-trigger" onclick="document.getElementById('chat-toggle').click()">
+            💬
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     
-    # Floating chatbox CSS
-    st.markdown('''
-    <style>
-    .floating-chatbox {
-        position: fixed;
-        bottom: 1.5rem;
-        right: 1.5rem;
-        width: 320px;
-        max-width: 90vw;
-        z-index: 9999;
-        background: #fff;
-        border-radius: 12px;
-        box-shadow: 0 2px 16px rgba(0,0,0,0.18);
-        border: 1px solid #e0e0e0;
-        font-size: 0.95rem;
-        transition: box-shadow 0.2s;
-    }
-    .floating-chatbox-header {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        color: #fff;
-        padding: 0.7rem 1rem;
-        border-radius: 12px 12px 0 0;
-        cursor: pointer;
-        font-weight: bold;
-        font-size: 1rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .floating-chatbox-body {
-        padding: 0.7rem 1rem 0.7rem 1rem;
-        max-height: 300px;
-        overflow-y: auto;
-    }
-    .floating-chatbox-input {
-        padding: 0.7rem 1rem;
-        border-top: 1px solid #eee;
-        background: #fafaff;
-        border-radius: 0 0 12px 12px;
-    }
-    .floating-chatbox-minimized {
-        width: 60px !important;
-        height: 60px !important;
-        border-radius: 50% !important;
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        color: #fff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 2rem;
-        position: fixed;
-        bottom: 1.5rem;
-        right: 1.5rem;
-        z-index: 9999;
-        box-shadow: 0 2px 16px rgba(0,0,0,0.18);
-        cursor: pointer;
-    }
-    @media (max-width: 600px) {
-        .floating-chatbox { right: 0.5rem; bottom: 0.5rem; width: 98vw; }
-        .floating-chatbox-minimized { right: 0.5rem; bottom: 0.5rem; }
-    }
-    </style>
-    ''', unsafe_allow_html=True)
+    # Hidden button for chat toggle
+    if st.button("Toggle Chat", key="chat-toggle", help="Toggle chat window"):
+        st.session_state.chat_visible = not st.session_state.chat_visible
     
-    # Minimized button
-    if not st.session_state.ai_chatbox_open:
-        st.markdown('''<div class="floating-chatbox-minimized" onclick="window.dispatchEvent(new Event('openChatbox'))">💬</div>''', unsafe_allow_html=True)
-        st.markdown('''<script>window.addEventListener('openChatbox', function() { window.parent.postMessage({isChatboxOpen: true}, '*'); });</script>''', unsafe_allow_html=True)
-        # Open button (Streamlit workaround)
-        if st.button("💬", key="open_chatbox_btn", help="Open AI Chat", use_container_width=True):
-            st.session_state.ai_chatbox_open = True
-        return
-    
-    # Floating chatbox
-    st.markdown('<div class="floating-chatbox">', unsafe_allow_html=True)
-    st.markdown('''<div class="floating-chatbox-header" onclick="window.dispatchEvent(new Event('closeChatbox'))">🤖 AI Chat <span style="float:right; cursor:pointer;">✖️</span></div>''', unsafe_allow_html=True)
-    st.markdown('''<script>window.addEventListener('closeChatbox', function() { window.parent.postMessage({isChatboxOpen: false}, '*'); });</script>''', unsafe_allow_html=True)
-    if st.button("✖️", key="close_chatbox_btn", help="Close AI Chat", use_container_width=True):
-        st.session_state.ai_chatbox_open = False
-        st.stop()
-    
-    # Chat history
-    st.markdown('<div class="floating-chatbox-body">', unsafe_allow_html=True)
-    for msg in st.session_state.ai_chat_history[-10:]:
-        if msg['role'] == 'user':
-            st.markdown(f'<div style="margin-bottom:0.5rem;"><b>🧑‍💻 You:</b> {msg["content"]}</div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div style="margin-bottom:0.5rem;"><b>🤖 AI:</b> {msg["content"]}</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Input box
-    st.markdown('<div class="floating-chatbox-input">', unsafe_allow_html=True)
-    chat_input = st.text_input("Ask anything about DSA, code, or notes...", key="ai_chat_input", label_visibility="collapsed", placeholder="Type your question and press Enter...")
-    if chat_input:
-        st.session_state.ai_chat_history.append({'role': 'user', 'content': chat_input})
-        with st.spinner("AI is thinking..."):
-            try:
-                ai_response = call_ai_api(chat_input)
-            except Exception as e:
-                ai_response = f"[Error: {e}]"
-        st.session_state.ai_chat_history.append({'role': 'ai', 'content': ai_response})
-        st.experimental_rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Show chat container if visible
+    if st.session_state.chat_visible:
+        st.markdown(
+            """
+            <div class="chat-container">
+                <div class="chat-header">
+                    <div class="chat-header-title">
+                        🤖 DSA Assistant
+                    </div>
+                    <div class="chat-header-actions">
+                        <button class="chat-header-button" onclick="clearChat()">🗑️</button>
+                        <button class="chat-header-button" onclick="document.getElementById('chat-toggle').click()">✕</button>
+                    </div>
+                </div>
+                <div class="chat-messages" id="chat-messages">
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # Display chat messages
+        for msg in st.session_state.chat_history:
+            if msg['role'] == 'user':
+                st.markdown(
+                    f"""
+                    <div class="chat-message user-message">
+                        <div class="message-avatar user-avatar">👤</div>
+                        <div class="message-content">
+                            {msg['content']}
+                            <div class="message-actions">
+                                <button class="message-action-button" onclick="editMessage(this)">✏️</button>
+                                <button class="message-action-button" onclick="deleteMessage(this)">🗑️</button>
+                            </div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    f"""
+                    <div class="chat-message assistant-message">
+                        <div class="message-avatar assistant-avatar">🤖</div>
+                        <div class="message-content">
+                            {msg['content']}
+                            <div class="message-actions">
+                                <button class="message-action-button" onclick="copyMessage(this)">📋</button>
+                            </div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+        
+        # Chat input
+        st.markdown(
+            """
+            <div class="chat-input-container">
+                <div class="chat-input-wrapper">
+                    <textarea
+                        class="chat-input"
+                        placeholder="Ask about DSA concepts..."
+                        rows="1"
+                        onkeydown="if(event.keyCode==13 && !event.shiftKey){event.preventDefault();document.getElementById('chat-send').click()}"
+                    ></textarea>
+                    <button class="chat-send-button" id="chat-send">
+                        ➤
+                    </button>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # Add JavaScript for chat functionality
+        st.markdown(
+            """
+            <script>
+            function clearChat() {
+                // Clear chat history
+                document.querySelector('.chat-messages').innerHTML = '';
+                // TODO: Add backend clear functionality
+            }
+            
+            function editMessage(button) {
+                const messageContent = button.closest('.message-content');
+                const text = messageContent.firstChild.textContent.trim();
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.className = 'chat-input';
+                textarea.style.width = '100%';
+                messageContent.innerHTML = '';
+                messageContent.appendChild(textarea);
+                textarea.focus();
+                
+                textarea.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        const newText = this.value;
+                        messageContent.innerHTML = newText;
+                        // TODO: Add backend update functionality
+                    }
+                });
+            }
+            
+            function deleteMessage(button) {
+                const message = button.closest('.chat-message');
+                message.remove();
+                // TODO: Add backend delete functionality
+            }
+            
+            function copyMessage(button) {
+                const text = button.closest('.message-content').firstChild.textContent.trim();
+                navigator.clipboard.writeText(text);
+                // Show copy feedback
+                const feedback = document.createElement('div');
+                feedback.textContent = 'Copied!';
+                feedback.style.position = 'absolute';
+                feedback.style.right = '8px';
+                feedback.style.bottom = '8px';
+                feedback.style.fontSize = '12px';
+                feedback.style.color = 'var(--text-bright)';
+                button.closest('.message-content').appendChild(feedback);
+                setTimeout(() => feedback.remove(), 1500);
+            }
+            
+            // Auto-resize textarea
+            document.querySelector('.chat-input').addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
+            </script>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # Handle chat input
+        with st.form(key="chat_form", clear_on_submit=True):
+            user_input = st.text_input("", key="chat_input", label_visibility="collapsed")
+            submit = st.form_submit_button("Send", use_container_width=True)
+            
+            if submit and user_input:
+                # Add user message
+                st.session_state.chat_history.append({
+                    'role': 'user',
+                    'content': user_input
+                })
+                
+                # Get AI response
+                try:
+                    response = call_ai_api(f"""
+                    User's DSA question: {user_input}
+                    
+                    Provide a clear, concise answer focusing on:
+                    1. Direct answer to the question
+                    2. Key concepts involved
+                    3. Example if helpful (short)
+                    4. Best practices or tips
+                    
+                    Keep the response focused and under 150 words.
+                    """)
+                    
+                    # Add AI response
+                    st.session_state.chat_history.append({
+                        'role': 'assistant',
+                        'content': response
+                    })
+                    
+                    # Rerun to show new messages
+                    st.rerun()
+                
+                except Exception as e:
+                    st.error(f"Error getting response: {str(e)}")
 
-# Update main function to use mobile navigation
 def main():
-    # Initialize session state first
-    if 'page' not in st.session_state:
-        st.session_state.page = "dashboard"
-    if 'current_problem' not in st.session_state:
-        st.session_state.current_problem = None
-    if 'user_code' not in st.session_state:
-        st.session_state.user_code = ""
-    if 'analysis' not in st.session_state:
-        st.session_state.analysis = None
-    if 'code_explanation' not in st.session_state:
-        st.session_state.code_explanation = None
+    """Main function to run the Streamlit app"""
+    # Initialize session state
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = 'dashboard'
     if 'selected_pattern' not in st.session_state:
-        # We'll initialize this after getting the system
         st.session_state.selected_pattern = None
+    if 'system' not in st.session_state:
+        st.session_state.system = get_system()
 
-    # Initialize system
-    system = get_system()
-    
-    # Setup cloud sync
-    cloud_sync = setup_cloud_sync()
-    
-    # Setup automatic PC sync
-    if not os.environ.get('STREAMLIT_SERVER_HEADLESS', False):
-        setup_auto_sync()
-    
-    # Initialize selected_pattern after system is loaded
-    if st.session_state.selected_pattern is None:
-        all_patterns = system.get_learning_order_patterns()
-        st.session_state.selected_pattern = all_patterns[0] if all_patterns else None
+    # Get system instance
+    system = st.session_state.system
 
-    # Mobile navigation
-    show_mobile_nav()
-    
-    # Display selected page
-    if st.session_state.page == "dashboard":
-        show_dashboard(system)
-        show_floating_ai_chatbox()
-    elif st.session_state.page == "solve":
-        show_solve_interface(system)
-        show_floating_ai_chatbox()
-    elif st.session_state.page == "browser":
-        show_problem_browser(system)
-        show_floating_ai_chatbox()
-    elif st.session_state.page == "review":
-        show_review_interface(system)
-        show_floating_ai_chatbox()
-    elif st.session_state.page == "study":
-        show_study_mode(system)
-        show_floating_ai_chatbox()
+    try:
+        # Show top progress bar
+        show_top_progress_bar(system)
+        
+        # Add some space for the top progress bar
+        st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
+        
+        # Show navigation
+        show_navigation()
+        
+        # Show appropriate page based on session state
+        current_page = st.session_state.current_page
+        
+        if current_page == "solve":
+            show_solve_interface()
+        elif current_page == "browse":
+            show_problem_browser(system)
+        elif current_page == "review":
+            show_review_interface(system)
+        elif current_page == "study":
+            show_study_mode(system)
+        else:  # dashboard is default
+            show_dashboard(system)
+        
+        # Show system status at the bottom
+        st.markdown("---")
+        st.markdown("### 🔧 System Status")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown("""
+                <div style="text-align: center;">
+                    <div style="color: #4CAF50; font-size: 24px;">✓</div>
+                    <div style="color: white; font-size: 16px;">Obsidian</div>
+                    <div style="color: #888; font-size: 12px;">Connected</div>
+                </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown("""
+                <div style="text-align: center;">
+                    <div style="color: #4CAF50; font-size: 24px;">✓</div>
+                    <div style="color: white; font-size: 16px;">Anki</div>
+                    <div style="color: #888; font-size: 12px;">Synced</div>
+                </div>
+            """, unsafe_allow_html=True)
+        with col3:
+            st.markdown("""
+                <div style="text-align: center;">
+                    <div style="color: #4CAF50; font-size: 24px;">✓</div>
+                    <div style="color: white; font-size: 16px;">NotebookLM</div>
+                    <div style="color: #888; font-size: 12px;">Ready</div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+    except Exception as e:
+        st.error(f"Error loading page: {str(e)}")
+        st.info("Try refreshing the page. If the error persists, please report it.")
+
+if __name__ == "__main__":
+    main()
 
 def show_cloud_status():
     """Show cloud deployment status and instructions"""
@@ -1572,7 +1664,13 @@ def generate_code_explanation(problem, code, language):
         
         ### Key Insights:
         [Insights would appear here]
-        """
+        """ 
 
-if __name__ == "__main__":
-    main() 
+def extract_flashcards_from_notes(notes):
+    # Simple extraction logic (e.g., look for Q&A patterns)
+    # Implement based on notes structure
+    return []  # Placeholder
+
+def load_random_flashcards():
+    # Load from Anki or saved files
+    return []  # Placeholder 

@@ -10,29 +10,79 @@ from anki_manager import create_flashcards
 
 # Add this master pattern list at the top of the class
 DSA_MASTER_PATTERNS = [
-    "Sliding Window", "Two Pointers", "BFS", "DFS", "Dynamic Programming",
-    "Binary Search", "Hash Map", "Stack", "Queue", "Linked List", "Tree", "Graph",
-    "Heap", "Trie", "Backtracking", "Greedy", "Bit Manipulation"
+    "Arrays & Hashing", "Two Pointers", "Sliding Window", "Stack",
+    "Binary Search", "Linked List", "Tree", "Trie", "Heap",
+    "Backtracking", "Graph", "Dynamic Programming", "Greedy",
+    "Math & Geometry", "Bit Manipulation"
 ]
 
-# Recommended learning order for DSA patterns
+# Define the recommended learning order for DSA patterns
 DSA_LEARNING_ORDER = [
-    "Arrays", "Hash Map", "Two Pointers", "Sliding Window", "Stack", "Queue", "Linked List",
-    "Binary Search", "Tree", "Heap", "Trie", "Backtracking", "Greedy", "Bit Manipulation",
-    "BFS", "DFS", "Graph", "Dynamic Programming"
+    "Arrays & Hashing",
+    "Two Pointers",
+    "Sliding Window",
+    "Stack",
+    "Binary Search",
+    "Linked List",
+    "Trees",
+    "Tries",
+    "Heap / Priority Queue",
+    "Backtracking",
+    "Graphs",
+    "Advanced Graphs",
+    "1-D Dynamic Programming",
+    "2-D Dynamic Programming",
+    "Greedy",
+    "Intervals",
+    "Math & Geometry",
+    "Bit Manipulation"
 ]
 
 class DSAMasterySystem:
+    """Core system for DSA practice and note management"""
+    
+    # Define the recommended learning order for DSA patterns
+    DSA_LEARNING_ORDER = [
+        "Arrays & Hashing",
+        "Two Pointers",
+        "Sliding Window",
+        "Stack",
+        "Binary Search",
+        "Linked List",
+        "Trees",
+        "Tries",
+        "Heap / Priority Queue",
+        "Backtracking",
+        "Graphs",
+        "Advanced Graphs",
+        "1-D Dynamic Programming",
+        "2-D Dynamic Programming",
+        "Greedy",
+        "Intervals",
+        "Math & Geometry",
+        "Bit Manipulation"
+    ]
+    
     def __init__(self):
+        """Initialize the system"""
         self.progress = self.load_progress()
         self.neetcode = self.load_neetcode()
         self.ensure_directories()
         self._ensure_patterns()
-    
+        
+        # Initialize current pattern if not set
+        if "current_pattern" not in self.progress["stats"]:
+            self.progress["stats"]["current_pattern"] = self.get_all_patterns()[0]
+        self._save_progress()
+
     def load_progress(self):
+        """Load progress from file or create new if not exists"""
         if os.path.exists(PROGRESS_FILE):
-            with open(PROGRESS_FILE) as f:
-                return json.load(f)
+            try:
+                with open(PROGRESS_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error loading progress: {e}")
         return {
             "problems": {},
             "patterns": {},
@@ -72,65 +122,181 @@ class DSAMasterySystem:
         """Get problem by ID (e.g., 'LC1')"""
         return next((p for p in self.neetcode if p.get("id") == problem_id), None)
     
-    def auto_detect_pattern(self, problem):
-        """Use AI to detect pattern from problem description"""
-        prompt = f"""
-        Based on this problem description, identify the primary DSA pattern:
-        Title: {problem['title']}
-        Description: {problem['description']}
-        
-        Respond ONLY with the pattern name from this list:
-        Sliding Window, Two Pointers, BFS, DFS, Dynamic Programming, 
-        Binary Search, Hash Map, Stack, Queue, Linked List, Tree, Graph, 
-        Heap, Trie, Backtracking, Greedy, Bit Manipulation.
-        """
-        return call_ai_api(prompt).strip()
-    
     def analyze_solution(self, problem, solution_code):
-        """Analyze and correct user's solution with AI"""
-        prompt = f"""
-        Problem: {problem['title']}
-        Description: {problem['description']}
-        
-        User's Solution:
-        {solution_code}
-        
-        Tasks:
-        1. Check if solution is correct (return boolean)
-        2. If incorrect, provide fixed optimal solution
-        3. Add detailed inline comments
-        4. Explain approach and complexity
-        5. Compare with brute force solution
-        6. Highlight 2 common mistakes
-        7. Create 3 flashcards (Q;A format)
-        
-        Return JSON format:
-        {{
-            "correct": bool,
-            "fixed_code": str,
-            "annotated_code": str,
-            "approach_summary": str,
-            "complexity": str,
-            "brute_force": str,
-            "mistakes": [str],
-            "flashcards": [str]
-        }}
-        """
-        return json.loads(call_ai_api(prompt))
-    
+        """Analyze a solution for correctness, complexity, and generate improvement suggestions"""
+        prompt = f"""You are a senior software engineer and DSA expert. Analyze this {problem['title']} solution:
+
+CODE TO ANALYZE:
+```
+{solution_code}
+```
+
+PROBLEM LINK: {problem['url']}
+
+Provide a detailed analysis in this format:
+1. CORRECTNESS
+- Is the solution logically correct?
+- Does it handle edge cases?
+- Any potential bugs or issues?
+
+2. COMPLEXITY ANALYSIS
+- Time complexity with explanation
+- Space complexity with explanation
+- Could we optimize further?
+
+3. CODE QUALITY
+- Code style and readability
+- Variable naming
+- Comments and documentation
+- Any code smells?
+
+4. APPROACH ANALYSIS
+- What pattern/technique is used?
+- Why is this approach good/bad?
+- Alternative approaches?
+
+5. LEARNING POINTS
+- Key insights from this solution
+- Common pitfalls to avoid
+- Similar problems to practice
+
+6. IMPROVEMENT SUGGESTIONS
+- Specific ways to optimize
+- Better approaches to consider
+- Code quality improvements
+
+Format your response in Markdown with clear sections and code examples where relevant.
+"""
+        return call_ai_api(prompt)
+
     def generate_full_notes(self, problem, analysis):
-        """Generate comprehensive notes with multiple approaches"""
-        prompt = f"""
-        For problem {problem['title']} ({problem['id']}), create comprehensive notes including:
-        1. Problem summary
-        2. Brute force approach with code and complexity
-        3. Optimal approach with code and complexity
-        4. Key insights and pattern identification
-        5. Edge cases
-        6. 5 Anki flashcards (Q;A format)
-        
-        Format as Markdown with clear sections.
-        """
+        """Generate comprehensive DSA notes including problem, solution, and analysis"""
+        prompt = f"""You are a DSA expert creating detailed study notes. Generate comprehensive notes for this problem:
+
+PROBLEM: {problem['title']}
+URL: {problem['url']}
+PATTERN: {problem.get('pattern', 'Unknown')}
+
+ANALYSIS:
+{analysis}
+
+Create detailed notes in this format:
+
+# {problem['title']}
+
+## Problem Understanding
+- Clear explanation of the problem
+- Key constraints and requirements
+- Example walkthrough with visualization
+- Edge cases to consider
+
+## Approach
+- Intuition behind the solution
+- Step-by-step solution strategy
+- Why this approach works
+- Pattern recognition tips
+
+## Solution Breakdown
+- Detailed code explanation
+- Key steps highlighted
+- Important variables/data structures
+- Critical algorithm steps
+
+## Complexity Analysis
+- Time complexity with explanation
+- Space complexity with explanation
+- Optimization possibilities
+
+## Implementation Details
+- Code implementation tips
+- Common pitfalls to avoid
+- Best practices to follow
+- Important edge cases
+
+## Learning Points
+- Key takeaways
+- Similar problems
+- Pattern application
+- Interview tips
+
+## Code
+```java
+// Include fully commented solution
+```
+
+Format in clean Markdown with:
+- Clear headings
+- Bullet points for readability
+- Code snippets where helpful
+- Visual explanations if needed
+
+Make it comprehensive but focused - each section should provide unique value."""
+        return call_ai_api(prompt)
+
+    def generate_code_explanation(self, problem, code, language):
+        """Generate a detailed explanation of the code solution"""
+        prompt = f"""As a DSA expert, explain this {problem['title']} solution in detail:
+
+CODE:
+```{language}
+{code}
+```
+
+Provide a thorough explanation in this format:
+
+1. SOLUTION OVERVIEW
+- High-level approach
+- Key algorithm/data structures used
+- Why this approach works
+
+2. CODE WALKTHROUGH
+- Line-by-line explanation
+- Key variables and their roles
+- Critical sections highlighted
+- Edge case handling
+
+3. COMPLEXITY ANALYSIS
+- Time complexity breakdown
+- Space complexity breakdown
+- Optimization opportunities
+
+4. IMPLEMENTATION INSIGHTS
+- Clever tricks used
+- Important decisions explained
+- Alternative approaches
+- Potential improvements
+
+5. LEARNING POINTS
+- Key takeaways
+- Similar patterns
+- Common mistakes to avoid
+- Interview tips
+
+Make it detailed but clear, using:
+- Simple language
+- Step-by-step explanations
+- Examples where helpful
+- Clear formatting
+
+Focus on helping others understand both the approach and implementation details."""
+        return call_ai_api(prompt)
+
+    def auto_detect_pattern(self, problem):
+        """Auto-detect the DSA pattern for a problem"""
+        prompt = f"""As a DSA expert, analyze this problem and determine its core pattern:
+
+PROBLEM: {problem['title']}
+URL: {problem['url']}
+
+Available patterns:
+{', '.join(self.DSA_LEARNING_ORDER)}
+
+Determine:
+1. Primary pattern used
+2. Why this pattern fits
+3. Any secondary patterns
+
+Return ONLY the primary pattern name exactly as shown in the list above. No explanation needed."""
         return call_ai_api(prompt)
     
     def save_to_obsidian(self, content, path):
@@ -191,26 +357,70 @@ class DSAMasterySystem:
         self.progress["stats"]["streak"] += 1
         self.progress["stats"]["last_run"] = datetime.now().isoformat()
         
-        with open(PROGRESS_FILE, "w") as f:
-            json.dump(self.progress, f, indent=2)
+        self._save_progress()
         
         return full_notes
 
+    def _save_progress(self):
+        """Save progress to file"""
+        try:
+            with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.progress, f, indent=2)
+        except Exception as e:
+            print(f"Error saving progress: {e}")
+
+    def update_progress(self, problem_id, status, pattern=None):
+        """Update progress for a problem"""
+        if problem_id not in self.progress["problems"]:
+            self.progress["problems"][problem_id] = {}
+        
+        self.progress["problems"][problem_id].update({
+            "status": status,
+            "date": datetime.now().isoformat(),
+            "pattern": pattern
+        })
+        
+        # Update pattern stats
+        if pattern:
+            if pattern not in self.progress["patterns"]:
+                self.progress["patterns"][pattern] = {"solved": 0, "attempted": 0}
+            if status.lower() == "completed":
+                self.progress["patterns"][pattern]["solved"] += 1
+            self.progress["patterns"][pattern]["attempted"] += 1
+        
+        # Update global stats
+        self.progress["stats"]["solved"] = len([p for p in self.progress["problems"].values() if p.get("status", "").lower() == "completed"])
+        self.progress["stats"]["last_run"] = datetime.now().isoformat()
+        
+        self._save_progress()
+
+    def get_progress(self):
+        """Get current progress stats"""
+        return {
+            "total_problems": len(self.neetcode),
+            "solved": self.progress["stats"]["solved"],
+            "streak": self.progress["stats"].get("streak", 0),
+            "patterns": self.progress["patterns"],
+            "last_run": self.progress["stats"]["last_run"]
+        }
+
     def get_patterns(self):
         """Return a sorted list of all patterns in the problem set."""
-        patterns = set()
-        for p in self.neetcode:
-            if p.get("pattern"):
-                patterns.add(p["pattern"])
-        return sorted(list(patterns))
+        return self.get_all_patterns()
 
-    def get_problems_by_pattern(self, pattern):
-        """Return all problems for a given pattern."""
-        return [p for p in self.neetcode if p.get("pattern") == pattern]
+    def get_all_patterns(self):
+        """Get list of all available patterns"""
+        return sorted(list(set([p.get("pattern", "") for p in self.neetcode if p.get("pattern")])))
+
+    def get_problems_by_pattern(self, pattern=None):
+        """Get all problems for a specific pattern"""
+        if pattern is None or pattern.lower() == "any":
+            return self.neetcode
+        return [p for p in self.neetcode if str(p.get("pattern", "")).lower() == pattern.lower()]
 
     def get_next_pattern(self):
         """Return the next pattern with unsolved problems, or None if all done."""
-        patterns = self.get_patterns()
+        patterns = self.get_all_patterns()
         for pattern in patterns:
             problems = self.get_problems_by_pattern(pattern)
             if any(str(p.get("status", "")).lower() != "completed" for p in problems):
@@ -218,63 +428,84 @@ class DSAMasterySystem:
         return None
 
     def _ensure_patterns(self):
-        # For each problem, if pattern is missing/empty, use category as fallback
-        for p in self.neetcode:
-            if not p.get("pattern") or not str(p["pattern"]).strip():
-                p["pattern"] = p.get("category", "Uncategorized")
+        """Ensure every problem has a pattern assigned"""
+        # Define category to pattern mapping
+        category_to_pattern = {
+            "Arrays": "Arrays & Hashing",
+            "Two Pointers": "Two Pointers",
+            "Sliding Window": "Sliding Window",
+            "Stack": "Stack",
+            "Binary Search": "Binary Search",
+            "Linked List": "Linked List",
+            "Trees": "Tree",
+            "Tries": "Trie",
+            "Heap/Priority Queue": "Heap",
+            "Backtracking": "Backtracking",
+            "Graphs": "Graph",
+            "Advanced Graphs": "Graph",
+            "1-D DP": "Dynamic Programming",
+            "2-D DP": "Dynamic Programming",
+            "Greedy": "Greedy",
+            "Intervals": "Arrays & Hashing",
+            "Math & Geometry": "Math & Geometry",
+            "Bit Manipulation": "Bit Manipulation"
+        }
+        
+        for problem in self.neetcode:
+            if not problem.get("pattern"):
+                # Use category mapping as fallback if no pattern is set
+                category = problem.get("category", "")
+                problem["pattern"] = category_to_pattern.get(category, category)
+                
+                # If still no pattern, try to detect it
+                if not problem["pattern"]:
+                    problem["pattern"] = self.auto_detect_pattern(problem)
+        
+        # Save updated problems
+        with open(NEETCODE_FILE, "w") as f:
+            json.dump(self.neetcode, f, indent=2)
 
-    def get_all_patterns(self):
-        # Return all patterns in master list, plus any extra from the data
-        patterns = set(DSA_MASTER_PATTERNS)
-        for p in self.neetcode:
-            if p.get("pattern"):
-                patterns.add(p["pattern"])
-        return sorted(list(patterns))
+    def get_current_pattern(self):
+        """Get the current pattern being studied"""
+        return self.progress["stats"].get("current_pattern", self.get_all_patterns()[0])
 
-    def get_problems_by_pattern(self, pattern):
-        # Return all problems for a given pattern, ordered by id
-        return sorted([p for p in self.neetcode if p.get("pattern") == pattern], key=lambda p: p.get("id", ""))
+    def set_current_pattern(self, pattern):
+        """Set the current pattern to study"""
+        if pattern in self.get_all_patterns():
+            self.progress["stats"]["current_pattern"] = pattern
+            self._save_progress()
+            return True
+        return False
 
     def get_next_unsolved_in_pattern(self, pattern):
-        # Return the next unsolved problem in the given pattern, ordered by id
-        problems = self.get_problems_by_pattern(pattern)
-        for p in problems:
-            if str(p.get("status", "")).lower() != "completed":
-                return p
+        """Get the next unsolved problem in the given pattern"""
+        if not pattern:
+            return None
+        pattern_problems = self.get_problems_by_pattern(pattern)
+        for problem in pattern_problems:
+            if str(problem.get("status", "")).lower() != "completed":
+                return problem
         return None
 
+    def get_learning_order(self):
+        """Get the recommended learning order for DSA patterns"""
+        return self.DSA_LEARNING_ORDER
+    
+    def get_pattern_index(self, pattern):
+        """Get the index of a pattern in the learning order"""
+        try:
+            return self.DSA_LEARNING_ORDER.index(pattern)
+        except ValueError:
+            return -1
+    
     def get_today_problem(self, pattern=None):
-        # Return the planned problem for today: next unsolved in selected pattern (or next pattern if not specified)
-        if not pattern:
+        """Return the planned problem for today: next unsolved in selected pattern (or next pattern if not specified)"""
+        if pattern is None:
             pattern = self.get_next_pattern()
-        if not pattern:
-            return None, None
-        problem = self.get_next_unsolved_in_pattern(pattern)
-        return pattern, problem
-
-    def get_learning_order_patterns(self):
-        # Return patterns in recommended learning order, then any extras
-        patterns_in_data = set(p.get("pattern") for p in self.neetcode if p.get("pattern"))
-        ordered = [p for p in DSA_LEARNING_ORDER if p in patterns_in_data]
-        extras = sorted(list(patterns_in_data - set(ordered)))
-        return ordered + extras
-
+        return self.get_next_unsolved_in_pattern(pattern)
+    
     def generate_dsa_note(self, problem, solution_code):
-        """
-        Generate a world-class DSA note and flashcards for a problem using AI.
-        The note includes:
-        - YAML frontmatter (pattern, tags, last reviewed, etc.)
-        - Problem statement and at least one example
-        - 2-3 hints
-        - Intuition (as a separate section before the code)
-        - General pattern approach
-        - Brute force solution (with code and inline comments)
-        - Best/optimal solution (with code and inline comments, and Java knowledge as code comments)
-        - Step-by-step breakdown after the code
-        - Key insights and edge cases
-        - Complexity
-        - 5-7 flashcards (Q&A)
-        """
+        """Generate a comprehensive DSA note for the given problem and solution"""
         prompt = f'''
 You are an expert DSA teacher and interviewer. For the following LeetCode problem, generate a world-class study note for a student who wants to master DSA and ace interviews. The note must:
 
