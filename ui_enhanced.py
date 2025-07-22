@@ -89,6 +89,68 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Add improved problem card CSS at the top (after other CSS)
+st.markdown('''
+<style>
+.problem-card {
+    background: #f7f7fa !important;
+    border-radius: 12px !important;
+    box-shadow: 0 2px 8px rgba(102,126,234,0.07);
+    border: 1px solid #e0e0e0 !important;
+    padding: 1rem !important;
+    margin: 0.5rem 0 !important;
+    font-size: 1rem !important;
+    color: #222 !important;
+    transition: box-shadow 0.2s;
+}
+.problem-card a { color: #5a67d8 !important; text-decoration: underline; }
+@media (max-width: 600px) {
+    .problem-card { font-size: 0.98rem !important; padding: 0.7rem !important; }
+}
+</style>
+''', unsafe_allow_html=True)
+
+# Add improved button and header CSS at the top (after other CSS)
+st.markdown('''
+<style>
+.accent-btn {
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-size: 1.05rem !important;
+    font-weight: 600 !important;
+    padding: 0.6rem 1.2rem !important;
+    margin: 0.2rem 0.1rem !important;
+    box-shadow: 0 2px 8px rgba(102,126,234,0.07);
+    transition: background 0.2s, box-shadow 0.2s;
+}
+.accent-btn:hover {
+    background: linear-gradient(90deg, #764ba2 0%, #667eea 100%) !important;
+    box-shadow: 0 4px 16px rgba(102,126,234,0.13);
+}
+.section-header {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-top: 1.2rem;
+    margin-bottom: 0.5rem;
+    color: #5a67d8;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.section-subtext {
+    font-size: 0.98rem;
+    color: #666;
+    margin-bottom: 0.7rem;
+}
+@media (max-width: 600px) {
+    .accent-btn { font-size: 1rem !important; padding: 0.5rem 0.7rem !important; }
+    .section-header { font-size: 1.08rem; }
+}
+</style>
+''', unsafe_allow_html=True)
+
 # Custom CSS for better styling
 st.markdown("""
 <style>
@@ -321,6 +383,19 @@ def show_mobile_nav():
         if st.button("🎓", help="Study", key="nav_study", use_container_width=True):
             st.session_state.page = "study"
     st.markdown("---")
+
+# Helper function to get LeetCode URL
+def get_leetcode_url(problem):
+    """Get LeetCode URL for a problem, using existing URL or generating one"""
+    # Use existing URL from the data if available
+    if 'url' in problem and problem['url']:
+        return problem['url']
+    
+    # Fallback to generated URL
+    title = problem['title'].lower()
+    # Clean the title for URL generation
+    title = title.replace(' ', '-').replace('(', '').replace(')', '').replace(',', '').replace('.', '').replace(':', '').replace(';', '')
+    return f"https://leetcode.com/problems/{title}/"
 
 # Add learning motivation features
 def show_learning_motivation(system):
@@ -589,6 +664,8 @@ def show_dashboard(system):
         - NotebookLM automatically has your notes!
         """)
     
+    st.markdown('<div class="section-header">📅 Today’s Problem</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtext">Solve today’s recommended problem to keep your streak going!</div>', unsafe_allow_html=True)
     # Today's problem
     today_problem = system.get_today_problem()
     if today_problem:
@@ -597,26 +674,39 @@ def show_dashboard(system):
         
         col1, col2 = st.columns([3, 1])
         with col1:
+            # Use helper function to get LeetCode URL
+            leetcode_url = get_leetcode_url(problem)
+            
             st.markdown(f"""
             <div class="problem-card">
-                <strong>{problem['id']} - {problem['title']}</strong><br>
-                <small>Pattern: {pattern} | Difficulty: {problem['difficulty']}</small>
+                <strong style='font-size:1.1rem'>{problem['id']} - {problem['title']}</strong><br>
+                <small>Pattern: <b>{pattern}</b> | Difficulty: <b>{problem['difficulty']}</b></small><br>
+                <a href="{leetcode_url}" target="_blank">🔗 Solve on LeetCode</a>
             </div>
             """, unsafe_allow_html=True)
         
         with col2:
-            if st.button("🚀 Start Solving", key="start_today", use_container_width=True):
+            if st.button("🚀 Start Solving Now", key="start_today", use_container_width=True, help="Go to solve tab", type="primary"):
                 st.session_state.page = "solve"
                 st.session_state.current_problem = problem
                 st.rerun()
     
+    st.markdown('<div class="section-header">📊 Progress Overview</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtext">Track your DSA journey and see your achievements at a glance.</div>', unsafe_allow_html=True)
     # Progress overview
-    st.subheader("📊 Progress Overview")
     
-    # Get progress data
-    total_problems = len(system.get_all_problems())
-    completed = len([p for p in system.get_all_problems() if str(p.get("status", "")).lower() == "completed"])
-    skipped = len([p for p in system.get_all_problems() if str(p.get("status", "")).lower() == "skipped"])
+    # Get progress data - handle case where get_all_problems might not exist
+    try:
+        all_problems = system.get_all_problems()
+        total_problems = len(all_problems)
+        completed = len([p for p in all_problems if str(p.get("status", "")).lower() == "completed"])
+        skipped = len([p for p in all_problems if str(p.get("status", "")).lower() == "skipped"])
+    except AttributeError:
+        # Fallback to neetcode attribute if get_all_problems doesn't exist
+        all_problems = system.neetcode
+        total_problems = len(all_problems)
+        completed = len([p for p in all_problems if str(p.get("status", "")).lower() == "completed"])
+        skipped = len([p for p in all_problems if str(p.get("status", "")).lower() == "skipped"])
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -631,30 +721,29 @@ def show_dashboard(system):
     st.progress(progress / 100)
     st.caption(f"Overall Progress: {progress:.1f}%")
     
+    st.markdown('<div class="section-header">⚡ Quick Actions</div>', unsafe_allow_html=True)
     # Quick actions
-    st.subheader("⚡ Quick Actions")
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("📝 Solve Problems", key="quick_solve", use_container_width=True):
+        if st.button("📝 Solve Problems", key="quick_solve", use_container_width=True, help="Practice new problems", type="primary"):
             st.session_state.page = "solve"
             st.rerun()
     with col2:
-        if st.button("📚 Study Mode", key="quick_study", use_container_width=True):
+        if st.button("📚 Study All Notes", key="quick_study", use_container_width=True, help="Review all notes", type="primary"):
             st.session_state.page = "study"
             st.rerun()
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("🔍 Browse Problems", key="quick_browse", use_container_width=True):
+        if st.button("🔍 Browse Problems", key="quick_browse", use_container_width=True, help="Browse all problems", type="primary"):
             st.session_state.page = "browser"
             st.rerun()
     with col2:
-        if st.button("📖 Review Notes", key="quick_review", use_container_width=True):
+        if st.button("📖 Review Notes", key="quick_review", use_container_width=True, help="Review your notes", type="primary"):
             st.session_state.page = "review"
             st.rerun()
 
-# Compact solve interface
 def show_solve_interface(system):
     """Mobile-friendly solve interface"""
     st.markdown("""
@@ -673,190 +762,202 @@ def show_solve_interface(system):
     
     # Compact today's problem
     pattern, today_problem = system.get_today_problem()
-    if today_problem and isinstance(today_problem, dict) and today_problem.get("pattern") == selected_pattern:
-        st.subheader(f"🎯 {today_problem['id']} - {today_problem['title']}")
-        st.markdown(f"**{today_problem['difficulty']}** • {today_problem['pattern']}")
-        
-        # Compact problem description
-        with st.expander("📝 Problem Description", expanded=False):
-            st.markdown(today_problem.get("description", "No description available"))
-        
-        # Compact code input
-        st.subheader("💻 Your Solution")
-        user_code = st.text_area("Code", value=st.session_state.get("user_code", ""), 
-                                height=200, key="code_input", 
-                                placeholder="Write your solution here...")
-        st.session_state.user_code = user_code
-        
-        # Compact action buttons
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🤖 Analyze", key="analyze_code", use_container_width=True):
-                if user_code.strip():
-                    with st.spinner("Analyzing..."):
-                        analysis = system.analyze_solution(today_problem, user_code)
-                        st.session_state.analysis = analysis
-                        st.session_state.code_explanation = generate_code_explanation(today_problem, user_code, "python")
-                else:
-                    st.warning("Please write some code first")
-        
-        with col2:
-            if st.button("✅ Mark Complete", key="mark_complete", use_container_width=True):
+    if not today_problem or not (isinstance(today_problem, dict) and today_problem.get("pattern") == selected_pattern):
+        st.warning("No problem loaded for this pattern. Click below to load today's problem.")
+        if st.button("🔄 Load Today's Problem", key="load_today_problem", use_container_width=True):
+            st.session_state.page = "solve"
+            st.session_state.current_problem = None
+            st.rerun()
+        return
+    
+    st.subheader(f"🎯 {today_problem['id']} - {today_problem['title']}")
+    st.markdown(f"**{today_problem['difficulty']}** • {today_problem['pattern']}")
+    
+    # Add LeetCode link using helper function
+    leetcode_url = get_leetcode_url(today_problem)
+    st.markdown(f"[🔗 Solve on LeetCode]({leetcode_url})")
+    
+    # Compact problem description
+    with st.expander("📝 Problem Description", expanded=False):
+        st.markdown(today_problem.get("description", "No description available"))
+    
+    # Clear code paste label
+    st.subheader("💻 Paste your code here")
+    user_code = st.text_area("Paste your code here:", value=st.session_state.get("user_code", ""), 
+                            height=200, key="code_input", 
+                            placeholder="Paste or write your solution here...")
+    st.session_state.user_code = user_code
+    
+    # Action buttons: Explain Solution and Submit Solution
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🤖 Explain Solution", key="explain_solution", use_container_width=True):
+            if user_code.strip():
+                with st.spinner("Analyzing and explaining your solution..."):
+                    analysis = system.analyze_solution(today_problem, user_code)
+                    st.session_state.analysis = analysis
+                    st.session_state.code_explanation = generate_code_explanation(today_problem, user_code, "python")
+            else:
+                st.warning("Please paste or write your code first.")
+    with col2:
+        if st.button("✅ Submit Solution", key="submit_solution", use_container_width=True):
+            if user_code.strip():
                 system.mark_problem_status(today_problem["id"], "completed")
                 st.success("Problem marked as completed!")
                 st.rerun()
+            else:
+                st.warning("Please paste or write your code first.")
+    
+    # Compact analysis results
+    if st.session_state.analysis:
+        with st.expander("📊 Analysis Results", expanded=False):
+            display_analysis_results(st.session_state.analysis, "python")
+    
+    # Compact code explanation
+    if st.session_state.code_explanation:
+        with st.expander("💡 Code Explanation", expanded=False):
+            display_code_explanation(st.session_state.code_explanation)
+    
+    # Compact note generation
+    if st.session_state.analysis:
+        note_md, flashcards = system.generate_dsa_note(today_problem, user_code)
+        st.session_state[f"flashcards_{today_problem['id']}"] = flashcards
+        st.session_state[f"note_md_{today_problem['id']}"] = note_md
         
-        # Compact analysis results
-        if st.session_state.analysis:
-            with st.expander("📊 Analysis Results", expanded=False):
-                display_analysis_results(st.session_state.analysis, "python")
-        
-        # Compact code explanation
-        if st.session_state.code_explanation:
-            with st.expander("💡 Code Explanation", expanded=False):
-                display_code_explanation(st.session_state.code_explanation)
-        
-        # Compact note generation
-        if st.session_state.analysis:
-            note_md, flashcards = system.generate_dsa_note(today_problem, user_code)
-            st.session_state[f"flashcards_{today_problem['id']}"] = flashcards
-            st.session_state[f"note_md_{today_problem['id']}"] = note_md
+        with st.expander("📝 Generated Note", expanded=False):
+            st.markdown(note_md, unsafe_allow_html=True)
             
-            with st.expander("📝 Generated Note", expanded=False):
-                st.markdown(note_md, unsafe_allow_html=True)
+            if st.button("💾 Save Note", key=f"save_note_{today_problem['id']}", use_container_width=True):
+                result = system.save_dsa_note_and_flashcards(today_problem, note_md, st.session_state.get(f"flashcards_{today_problem['id']}", []))
+                st.success("✅ Note saved!")
                 
-                if st.button("💾 Save Note", key=f"save_note_{today_problem['id']}", use_container_width=True):
-                    result = system.save_dsa_note_and_flashcards(today_problem, note_md, st.session_state.get(f"flashcards_{today_problem['id']}", []))
-                    st.success("✅ Note saved!")
-                    
-                    # Cloud sync integration
-                    if 'cloud_sync' in locals() and cloud_sync:
-                        try:
-                            filename = f"{today_problem['id']} - {today_problem['title']}.md"
-                            if cloud_sync.sync_note_to_cloud(note_md, filename):
-                                st.success("☁️ Synced to cloud!")
-                            
-                            flashcards = st.session_state.get(f"flashcards_{today_problem['id']}", [])
-                            if flashcards:
-                                deck_name = f"DSA_{today_problem['pattern']}"
-                                if cloud_sync.sync_flashcards_to_anki(flashcards, deck_name):
-                                    st.success("📚 Synced to Anki!")
-                        except Exception as e:
-                            st.warning(f"Cloud sync: {e}")
-                
-                # Mobile download buttons
-                st.markdown("---")
-                st.markdown("#### 📱 Mobile Downloads")
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    if st.button("📥 Download Note", key=f"download_note_{today_problem['id']}", use_container_width=True):
-                        try:
-                            import base64
-                            b64 = base64.b64encode(note_md.encode()).decode()
-                            href = f'<a href="data:file/md;base64,{b64}" download="{today_problem["title"].replace(" ", "_")}.md">📥 Download Note</a>'
-                            st.markdown(href, unsafe_allow_html=True)
-                            st.success("✅ Note ready for download!")
-                        except Exception as e:
-                            st.error(f"Download error: {e}")
-                
-                with col2:
-                    if st.button("📊 Export Flashcards", key=f"export_flashcards_{today_problem['id']}", use_container_width=True):
-                        try:
-                            import pandas as pd
-                            df = pd.DataFrame(flashcards)
-                            csv = df.to_csv(index=False)
-                            b64 = base64.b64encode(csv.encode()).decode()
-                            href = f'<a href="data:file/csv;base64,{b64}" download="{today_problem["title"].replace(" ", "_")}_flashcards.csv">📊 Download Flashcards</a>'
-                            st.markdown(href, unsafe_allow_html=True)
-                            st.success("✅ Flashcards ready for download!")
-                        except Exception as e:
-                            st.error(f"Export error: {e}")
-                
-                with col3:
-                    if st.button("📋 Copy to Clipboard", key=f"copy_note_{today_problem['id']}", use_container_width=True):
-                        try:
-                            st.code(note_md)
-                            st.success("✅ Note copied! Paste into Obsidian on PC")
-                        except Exception as e:
-                            st.error(f"Copy error: {e}")
-                
-                # Cloud upload buttons
-                st.markdown("#### ☁️ Direct Cloud Upload")
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    if st.button("🐙 Upload to GitHub", key=f"github_upload_{today_problem['id']}", use_container_width=True):
-                        try:
-                            from cloud_sync import CloudSync
-                            cloud_sync = CloudSync()
-                            filename = f"{today_problem['id']} - {today_problem['title']}.md"
-                            success, message = cloud_sync.upload_note_to_github(note_md, filename, today_problem['pattern'])
-                            if success:
-                                st.success(message)
-                            else:
-                                st.warning(f"GitHub upload: {message}")
-                        except Exception as e:
-                            st.error(f"GitHub upload error: {e}")
-                
-                with col2:
-                    if st.button("📊 Upload Flashcards", key=f"upload_flashcards_{today_problem['id']}", use_container_width=True):
-                        try:
-                            from cloud_sync import CloudSync
-                            cloud_sync = CloudSync()
-                            filename = f"{today_problem['id']} - {today_problem['title']}_flashcards.csv"
-                            success, message = cloud_sync.upload_flashcards_to_github(flashcards, filename, today_problem['title'])
-                            if success:
-                                st.success(message)
-                            else:
-                                st.warning(f"Flashcard upload: {message}")
-                        except Exception as e:
-                            st.error(f"Flashcard upload error: {e}")
-                
-                # NotebookLM Export
-                st.markdown("#### 📚 NotebookLM Export")
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    if st.button("📚 Export to NotebookLM", key=f"notebooklm_export_{today_problem['id']}", use_container_width=True):
-                        try:
-                            from notebooklm_export import NotebookLMExporter
-                            exporter = NotebookLMExporter()
-                            notebooklm_content = exporter.parse_note_for_notebooklm(note_md, today_problem['pattern'], f"{today_problem['id']} - {today_problem['title']}.md")
-                            
-                            # Save to NotebookLM folder
-                            output_path = Path("notebooklm_export") / f"{today_problem['pattern']}_{today_problem['id']} - {today_problem['title']}.md"
-                            output_path.parent.mkdir(exist_ok=True)
-                            with open(output_path, 'w', encoding='utf-8') as f:
-                                f.write(notebooklm_content)
-                            
-                            st.success(f"✅ Exported to NotebookLM: {output_path}")
-                        except Exception as e:
-                            st.error(f"NotebookLM export error: {e}")
-                
-                with col2:
-                    if st.button("🔄 Auto-Sync All", key=f"auto_sync_{today_problem['id']}", use_container_width=True):
-                        try:
-                            # Upload to GitHub
-                            from cloud_sync import CloudSync
-                            cloud_sync = CloudSync()
-                            note_filename = f"{today_problem['id']} - {today_problem['title']}.md"
-                            flashcard_filename = f"{today_problem['id']} - {today_problem['title']}_flashcards.csv"
-                            
-                            note_success, note_msg = cloud_sync.upload_note_to_github(note_md, note_filename, today_problem['pattern'])
-                            flashcard_success, flashcard_msg = cloud_sync.upload_flashcards_to_github(flashcards, flashcard_filename, today_problem['title'])
-                            
-                            # Export to NotebookLM
-                            from notebooklm_export import NotebookLMExporter
-                            exporter = NotebookLMExporter()
-                            exporter.export_to_notebooklm(auto_sync=True)
-                            
-                            if note_success and flashcard_success:
-                                st.success("✅ Auto-sync complete! Uploaded to GitHub and exported to NotebookLM")
-                            else:
-                                st.warning(f"Partial sync: {note_msg}, {flashcard_msg}")
-                        except Exception as e:
-                            st.error(f"Auto-sync error: {e}")
+                # Cloud sync integration
+                if 'cloud_sync' in locals() and cloud_sync:
+                    try:
+                        filename = f"{today_problem['id']} - {today_problem['title']}.md"
+                        if cloud_sync.sync_note_to_cloud(note_md, filename):
+                            st.success("☁️ Synced to cloud!")
+                        
+                        flashcards = st.session_state.get(f"flashcards_{today_problem['id']}", [])
+                        if flashcards:
+                            deck_name = f"DSA_{today_problem['pattern']}"
+                            if cloud_sync.sync_flashcards_to_anki(flashcards, deck_name):
+                                st.success("📚 Synced to Anki!")
+                    except Exception as e:
+                        st.warning(f"Cloud sync: {e}")
+            
+            # Mobile download buttons
+            st.markdown("---")
+            st.markdown("#### 📱 Mobile Downloads")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if st.button("📥 Download Note", key=f"download_note_{today_problem['id']}", use_container_width=True):
+                    try:
+                        import base64
+                        b64 = base64.b64encode(note_md.encode()).decode()
+                        href = f'<a href="data:file/md;base64,{b64}" download="{today_problem["title"].replace(" ", "_")}.md">📥 Download Note</a>'
+                        st.markdown(href, unsafe_allow_html=True)
+                        st.success("✅ Note ready for download!")
+                    except Exception as e:
+                        st.error(f"Download error: {e}")
+            
+            with col2:
+                if st.button("📊 Export Flashcards", key=f"export_flashcards_{today_problem['id']}", use_container_width=True):
+                    try:
+                        import pandas as pd
+                        df = pd.DataFrame(flashcards)
+                        csv = df.to_csv(index=False)
+                        b64 = base64.b64encode(csv.encode()).decode()
+                        href = f'<a href="data:file/csv;base64,{b64}" download="{today_problem["title"].replace(" ", "_")}_flashcards.csv">📊 Download Flashcards</a>'
+                        st.markdown(href, unsafe_allow_html=True)
+                        st.success("✅ Flashcards ready for download!")
+                    except Exception as e:
+                        st.error(f"Export error: {e}")
+            
+            with col3:
+                if st.button("📋 Copy to Clipboard", key=f"copy_note_{today_problem['id']}", use_container_width=True):
+                    try:
+                        st.code(note_md)
+                        st.success("✅ Note copied! Paste into Obsidian on PC")
+                    except Exception as e:
+                        st.error(f"Copy error: {e}")
+            
+            # Cloud upload buttons
+            st.markdown("#### ☁️ Direct Cloud Upload")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("🐙 Upload to GitHub", key=f"github_upload_{today_problem['id']}", use_container_width=True):
+                    try:
+                        from cloud_sync import CloudSync
+                        cloud_sync = CloudSync()
+                        filename = f"{today_problem['id']} - {today_problem['title']}.md"
+                        success, message = cloud_sync.upload_note_to_github(note_md, filename, today_problem['pattern'])
+                        if success:
+                            st.success(message)
+                        else:
+                            st.warning(f"GitHub upload: {message}")
+                    except Exception as e:
+                        st.error(f"GitHub upload error: {e}")
+            
+            with col2:
+                if st.button("📊 Upload Flashcards", key=f"upload_flashcards_{today_problem['id']}", use_container_width=True):
+                    try:
+                        from cloud_sync import CloudSync
+                        cloud_sync = CloudSync()
+                        filename = f"{today_problem['id']} - {today_problem['title']}_flashcards.csv"
+                        success, message = cloud_sync.upload_flashcards_to_github(flashcards, filename, today_problem['title'])
+                        if success:
+                            st.success(message)
+                        else:
+                            st.warning(f"Flashcard upload: {message}")
+                    except Exception as e:
+                        st.error(f"Flashcard upload error: {e}")
+            
+            # NotebookLM Export
+            st.markdown("#### 📚 NotebookLM Export")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("📚 Export to NotebookLM", key=f"notebooklm_export_{today_problem['id']}", use_container_width=True):
+                    try:
+                        from notebooklm_export import NotebookLMExporter
+                        exporter = NotebookLMExporter()
+                        notebooklm_content = exporter.parse_note_for_notebooklm(note_md, today_problem['pattern'], f"{today_problem['id']} - {today_problem['title']}.md")
+                        
+                        # Save to NotebookLM folder
+                        output_path = Path("notebooklm_export") / f"{today_problem['pattern']}_{today_problem['id']} - {today_problem['title']}.md"
+                        output_path.parent.mkdir(exist_ok=True)
+                        with open(output_path, 'w', encoding='utf-8') as f:
+                            f.write(notebooklm_content)
+                        
+                        st.success(f"✅ Exported to NotebookLM: {output_path}")
+                    except Exception as e:
+                        st.error(f"NotebookLM export error: {e}")
+            
+            with col2:
+                if st.button("🔄 Auto-Sync All", key=f"auto_sync_{today_problem['id']}", use_container_width=True):
+                    try:
+                        # Upload to GitHub
+                        from cloud_sync import CloudSync
+                        cloud_sync = CloudSync()
+                        filename = f"{today_problem['id']} - {today_problem['title']}.md"
+                        note_success, note_message = cloud_sync.upload_note_to_github(note_md, filename, today_problem['pattern'])
+                        # Upload flashcards
+                        flashcard_filename = f"{today_problem['id']} - {today_problem['title']}_flashcards.csv"
+                        flashcard_success, flashcard_message = cloud_sync.upload_flashcards_to_github(flashcards, flashcard_filename, today_problem['title'])
+                        # Export to NotebookLM
+                        from notebooklm_export import NotebookLMExporter
+                        exporter = NotebookLMExporter()
+                        notebooklm_content = exporter.parse_note_for_notebooklm(note_md, today_problem['pattern'], f"{today_problem['id']} - {today_problem['title']}.md")
+                        output_path = Path("notebooklm_export") / f"{today_problem['pattern']}_{today_problem['id']} - {today_problem['title']}.md"
+                        output_path.parent.mkdir(exist_ok=True)
+                        with open(output_path, 'w', encoding='utf-8') as f:
+                            f.write(notebooklm_content)
+                        st.success("✅ Auto-sync complete!")
+                    except Exception as e:
+                        st.error(f"Auto-sync error: {e}")
         
         # Compact AI chat
         with st.expander("🤖 AI Chat", expanded=False):
@@ -931,10 +1032,14 @@ def show_problem_browser(system):
         status = str(problem.get("status", "")).lower()
         status_emoji = {"completed": "✅", "skipped": "⏭️", "": "⏳"}.get(status, "⏳")
         
+        # Use helper function to get LeetCode URL
+        leetcode_url = get_leetcode_url(problem)
+        
         st.markdown(f"""
         <div class="problem-card">
-            {status_emoji} <strong>{problem['id']} - {problem['title']}</strong><br>
-            <small>{problem['difficulty']} • {problem['pattern']}</small>
+            {status_emoji} <strong style='font-size:1.05rem'>{problem['id']} - {problem['title']}</strong><br>
+            <small>{problem['difficulty']} • {problem['pattern']}</small><br>
+            <a href="{leetcode_url}" target="_blank">🔗 Solve on LeetCode</a>
         </div>
         """, unsafe_allow_html=True)
 
@@ -990,56 +1095,233 @@ def show_review_interface(system):
             for i, card in enumerate(flashcards, 1):
                 st.markdown(f"**{i}.** {card}")
 
-# Compact study mode
 def show_study_mode(system):
-    """Mobile-friendly study mode"""
+    """Study Mode: Review all notes from Google Drive or GitHub, with sorting/filtering/search"""
+    import os
+    import glob
+    import re
+    import base64
+    import requests
+    from pathlib import Path
+    import streamlit as st
+
     st.markdown("""
     <div class="main-header">
-        <h1>🎓 Study Mode</h1>
-        <p class="mobile-text">Focused study sessions</p>
+        <h1>📚 Study Mode</h1>
+        <p class="mobile-text">Review, search, and study all your notes</p>
     </div>
     """, unsafe_allow_html=True)
-    
-    # Pattern selector
-    all_patterns = system.get_learning_order_patterns()
-    selected_pattern = st.selectbox("Study Pattern", all_patterns, 
-                                   index=all_patterns.index(st.session_state.selected_pattern) if st.session_state.selected_pattern in all_patterns else 0, 
-                                   key="study_pattern_select")
-    st.session_state.selected_pattern = selected_pattern
-    
-    # Pattern introduction
-    if st.button("📚 Get Pattern Intro", key="pattern_intro_btn"):
-        prompt = f"Explain the {selected_pattern} pattern in DSA. Include key concepts, common problems, and study tips."
+
+    # --- Load notes from Google Drive (preferred) or GitHub (fallback) ---
+    notes = []
+    note_source = ""
+    # Try Google Drive first
+    gdrive_folder = os.environ.get('GDRIVE_FOLDER_ID')
+    gdrive_creds = os.environ.get('GDRIVE_CREDENTIALS')
+    if gdrive_folder and gdrive_creds:
         try:
-            pattern_intro = call_ai_api(prompt)
-            if pattern_intro and pattern_intro.strip():
-                st.session_state.pattern_intro = pattern_intro
-            else:
-                st.session_state.pattern_intro = f"## {selected_pattern}\n\nThis is a fundamental pattern in Data Structures and Algorithms. Practice problems in this pattern to master the concept."
-            st.session_state.pattern_intro_pattern = selected_pattern
+            from cloud_sync import CloudSync
+            cloud_sync = CloudSync()
+            notes = cloud_sync.list_notes_from_gdrive()
+            note_source = "Google Drive"
         except Exception as e:
-            st.session_state.pattern_intro = f"## {selected_pattern}\n\nThis is a fundamental pattern in Data Structures and Algorithms. Practice problems in this pattern to master the concept.\n\n*Note: AI introduction failed: {e}*"
-            st.session_state.pattern_intro_pattern = selected_pattern
+            st.warning(f"Google Drive load failed: {e}")
+    # Fallback to local folder
+    if not notes:
+        local_notes = Path("local_notes")
+        if local_notes.exists():
+            for note_file in local_notes.rglob("*.md"):
+                with open(note_file, "r", encoding="utf-8") as f:
+                    notes.append({
+                        "title": note_file.stem,
+                        "content": f.read(),
+                        "pattern": note_file.parent.name,
+                        "path": str(note_file)
+                    })
+            note_source = "Local Folder"
+    # Fallback to GitHub
+    if not notes and os.environ.get('GITHUB_TOKEN') and os.environ.get('GITHUB_REPO'):
+        try:
+            headers = {"Authorization": f"token {os.environ['GITHUB_TOKEN']}", "Accept": "application/vnd.github.v3+json"}
+            repo = os.environ['GITHUB_REPO']
+            api_url = f"https://api.github.com/repos/{repo}/contents/notes"
+            r = requests.get(api_url, headers=headers)
+            if r.status_code == 200:
+                for file_info in r.json():
+                    if file_info['name'].endswith('.md'):
+                        file_url = file_info['download_url']
+                        note_content = requests.get(file_url).text
+                        notes.append({
+                            "title": file_info['name'].replace('.md',''),
+                            "content": note_content,
+                            "pattern": file_info.get('path','').split('/')[-2] if '/' in file_info.get('path','') else '',
+                            "path": file_info['path']
+                        })
+                note_source = "GitHub"
+        except Exception as e:
+            st.warning(f"GitHub load failed: {e}")
+
+    if not notes:
+        st.info("No notes found in Google Drive, local folder, or GitHub.")
+        return
+
+    # --- Sorting/filtering/search UI ---
+    patterns = sorted(set(n.get('pattern','') for n in notes if n.get('pattern','')))
+    pattern_filter = st.selectbox("Pattern", ["All"] + patterns, key="study_pattern")
+    search_query = st.text_input("Search notes by title or content", key="study_search")
+    sort_by = st.selectbox("Sort by", ["Title", "Pattern"], key="study_sort")
+
+    filtered_notes = notes
+    if pattern_filter != "All":
+        filtered_notes = [n for n in filtered_notes if n.get('pattern','') == pattern_filter]
+    if search_query:
+        filtered_notes = [n for n in filtered_notes if search_query.lower() in n['title'].lower() or search_query.lower() in n['content'].lower()]
+    if sort_by == "Title":
+        filtered_notes = sorted(filtered_notes, key=lambda n: n['title'])
+    elif sort_by == "Pattern":
+        filtered_notes = sorted(filtered_notes, key=lambda n: n.get('pattern',''))
+
+    st.markdown(f"**Source:** {note_source} | **Total Notes:** {len(filtered_notes)}")
+
+    # --- Display notes ---
+    for note in filtered_notes:
+        with st.expander(f"📝 {note['title']} [{note.get('pattern','')}]", expanded=False):
+            st.markdown(note['content'], unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
+            with col1:
+                b64 = base64.b64encode(note['content'].encode()).decode()
+                href = f'<a href="data:file/md;base64,{b64}" download="{note["title"].replace(" ", "_")}.md">📥 Download Note</a>'
+                st.markdown(href, unsafe_allow_html=True)
+            with col2:
+                if st.button(f"📚 Export to NotebookLM", key=f"notebooklm_export_{note['title']}"):
+                    try:
+                        from notebooklm_export import NotebookLMExporter
+                        exporter = NotebookLMExporter()
+                        notebooklm_content = exporter.parse_note_for_notebooklm(note['content'], note.get('pattern',''), f"{note['title']}.md")
+                        output_path = Path("notebooklm_export") / f"{note.get('pattern','')}_{note['title']}.md"
+                        output_path.parent.mkdir(exist_ok=True)
+                        with open(output_path, 'w', encoding='utf-8') as f:
+                            f.write(notebooklm_content)
+                        st.success(f"✅ Exported to NotebookLM: {output_path}")
+                    except Exception as e:
+                        st.error(f"NotebookLM export error: {e}")
+
+# Floating AI Chatbox (persistent on all pages)
+def show_floating_ai_chatbox():
+    import streamlit as st
+    from ai_client import call_ai_api
+    import time
     
-    if st.session_state.get("pattern_intro") and st.session_state.get("pattern_intro_pattern") == selected_pattern:
-        with st.expander("📚 Pattern Introduction", expanded=False):
-            st.markdown(st.session_state.pattern_intro, unsafe_allow_html=True)
+    # Use session state for chat history
+    if 'ai_chat_history' not in st.session_state:
+        st.session_state.ai_chat_history = []
+    if 'ai_chatbox_open' not in st.session_state:
+        st.session_state.ai_chatbox_open = False
     
-    # Study problems
-    problems = system.get_problems_by_pattern(selected_pattern)
-    unsolved = [p for p in problems if str(p.get("status", "")).lower() != "completed"]
+    # Floating chatbox CSS
+    st.markdown('''
+    <style>
+    .floating-chatbox {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        width: 320px;
+        max-width: 90vw;
+        z-index: 9999;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.18);
+        border: 1px solid #e0e0e0;
+        font-size: 0.95rem;
+        transition: box-shadow 0.2s;
+    }
+    .floating-chatbox-header {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        padding: 0.7rem 1rem;
+        border-radius: 12px 12px 0 0;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .floating-chatbox-body {
+        padding: 0.7rem 1rem 0.7rem 1rem;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .floating-chatbox-input {
+        padding: 0.7rem 1rem;
+        border-top: 1px solid #eee;
+        background: #fafaff;
+        border-radius: 0 0 12px 12px;
+    }
+    .floating-chatbox-minimized {
+        width: 60px !important;
+        height: 60px !important;
+        border-radius: 50% !important;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        z-index: 9999;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.18);
+        cursor: pointer;
+    }
+    @media (max-width: 600px) {
+        .floating-chatbox { right: 0.5rem; bottom: 0.5rem; width: 98vw; }
+        .floating-chatbox-minimized { right: 0.5rem; bottom: 0.5rem; }
+    }
+    </style>
+    ''', unsafe_allow_html=True)
     
-    if unsolved:
-        st.subheader(f"📝 Study Problems ({len(unsolved)})")
-        for p in unsolved[:5]:  # Show only first 5 for mobile
-            st.markdown(f"""
-            <div class="problem-card">
-                <strong>{p['id']} - {p['title']}</strong><br>
-                <small>{p['difficulty']}</small>
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.success("🎉 All problems in this pattern completed!")
+    # Minimized button
+    if not st.session_state.ai_chatbox_open:
+        st.markdown('''<div class="floating-chatbox-minimized" onclick="window.dispatchEvent(new Event('openChatbox'))">💬</div>''', unsafe_allow_html=True)
+        st.markdown('''<script>window.addEventListener('openChatbox', function() { window.parent.postMessage({isChatboxOpen: true}, '*'); });</script>''', unsafe_allow_html=True)
+        # Open button (Streamlit workaround)
+        if st.button("💬", key="open_chatbox_btn", help="Open AI Chat", use_container_width=True):
+            st.session_state.ai_chatbox_open = True
+        return
+    
+    # Floating chatbox
+    st.markdown('<div class="floating-chatbox">', unsafe_allow_html=True)
+    st.markdown('''<div class="floating-chatbox-header" onclick="window.dispatchEvent(new Event('closeChatbox'))">🤖 AI Chat <span style="float:right; cursor:pointer;">✖️</span></div>''', unsafe_allow_html=True)
+    st.markdown('''<script>window.addEventListener('closeChatbox', function() { window.parent.postMessage({isChatboxOpen: false}, '*'); });</script>''', unsafe_allow_html=True)
+    if st.button("✖️", key="close_chatbox_btn", help="Close AI Chat", use_container_width=True):
+        st.session_state.ai_chatbox_open = False
+        st.stop()
+    
+    # Chat history
+    st.markdown('<div class="floating-chatbox-body">', unsafe_allow_html=True)
+    for msg in st.session_state.ai_chat_history[-10:]:
+        if msg['role'] == 'user':
+            st.markdown(f'<div style="margin-bottom:0.5rem;"><b>🧑‍💻 You:</b> {msg["content"]}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div style="margin-bottom:0.5rem;"><b>🤖 AI:</b> {msg["content"]}</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Input box
+    st.markdown('<div class="floating-chatbox-input">', unsafe_allow_html=True)
+    chat_input = st.text_input("Ask anything about DSA, code, or notes...", key="ai_chat_input", label_visibility="collapsed", placeholder="Type your question and press Enter...")
+    if chat_input:
+        st.session_state.ai_chat_history.append({'role': 'user', 'content': chat_input})
+        with st.spinner("AI is thinking..."):
+            try:
+                ai_response = call_ai_api(chat_input)
+            except Exception as e:
+                ai_response = f"[Error: {e}]"
+        st.session_state.ai_chat_history.append({'role': 'ai', 'content': ai_response})
+        st.experimental_rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # Update main function to use mobile navigation
 def main():
@@ -1079,14 +1361,19 @@ def main():
     # Display selected page
     if st.session_state.page == "dashboard":
         show_dashboard(system)
+        show_floating_ai_chatbox()
     elif st.session_state.page == "solve":
         show_solve_interface(system)
+        show_floating_ai_chatbox()
     elif st.session_state.page == "browser":
         show_problem_browser(system)
+        show_floating_ai_chatbox()
     elif st.session_state.page == "review":
         show_review_interface(system)
+        show_floating_ai_chatbox()
     elif st.session_state.page == "study":
         show_study_mode(system)
+        show_floating_ai_chatbox()
 
 def show_cloud_status():
     """Show cloud deployment status and instructions"""
