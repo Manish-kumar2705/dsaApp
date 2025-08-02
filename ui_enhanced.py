@@ -379,7 +379,7 @@ def setup_auto_sync():
 def show_mobile_nav():
     """Compact mobile navigation"""
     st.markdown("---")
-    nav_cols = st.columns(5)
+    nav_cols = st.columns(4)
     with nav_cols[0]:
         if st.button("🏠", help="Dashboard", key="nav_dash", use_container_width=True):
             st.session_state.page = "dashboard"
@@ -390,9 +390,6 @@ def show_mobile_nav():
         if st.button("📚", help="Browse", key="nav_browse", use_container_width=True):
             st.session_state.page = "browser"
     with nav_cols[3]:
-        if st.button("📖", help="Review", key="nav_review", use_container_width=True):
-            st.session_state.page = "review"
-    with nav_cols[4]:
         if st.button("🎓", help="Study", key="nav_study", use_container_width=True):
             st.session_state.page = "study"
     st.markdown("---")
@@ -780,8 +777,8 @@ def show_solve_interface():
                 btn_col, link_col = st.columns([3, 1])
                 with btn_col:
                     if st.button(f"{problem['id']}: {problem['title']} {status_emoji}", key=f"problem_{problem['id']}", use_container_width=True, type="secondary"):
-                    st.session_state.selected_problem = problem
-                    st.rerun()
+                        st.session_state.selected_problem = problem
+                        st.rerun()
                 with link_col:
                     st.link_button("🔗", problem['url'], use_container_width=True)
 
@@ -867,18 +864,31 @@ def show_solve_interface():
                             notes_dir = Path('notes') / pattern
                             notes_dir.mkdir(parents=True, exist_ok=True)
                             notes_path = notes_dir / f"{problem['id']}_{title}.md"
+                            overwrite = False
+                            if notes_path.exists():
+                                st.warning(f"A note for this problem already exists and will be overwritten in Obsidian and NotebookLM.")
+                                overwrite = True
                             with open(notes_path, 'w', encoding='utf-8') as f:
                                 f.write(edited_notes)
-                            st.success(f"✅ Notes saved to {notes_path}")
+                            st.success(f"Notes saved to {notes_path}")
 
-                            # Sync to cloud
+                            # --- GitHub Sync ---
                             cloud_sync = CloudSync()
-                            cloud_sync.sync_notes_to_github()  # Or GDrive if configured
+                            github_filename = f"{problem['id']}_{title}.md"
+                            github_success = cloud_sync.sync_note_to_cloud(edited_notes, github_filename)
+                            if github_success:
+                                st.success("Notes pushed to GitHub vault!")
+                            else:
+                                st.info("GitHub sync not configured or failed. Notes only saved locally.")
 
-                            # Export to NotebookLM
+                            # --- NotebookLM Export ---
                             from notebooklm_export import NotebookLMExporter
                             exporter = NotebookLMExporter()
+                            notebooklm_export_path = Path('notebooklm_export') / f"{problem['id']}_{title}.md"
+                            if notebooklm_export_path.exists() and not overwrite:
+                                st.warning(f"A note for this problem already exists in NotebookLM and will be overwritten.")
                             exporter.export_note_to_notebooklm(notes_path)
+                            st.success("Note exported to NotebookLM!")
 
                             # Generate Anki flashcards
                             from anki_manager import create_flashcards_from_notes
@@ -989,23 +999,22 @@ int main() {
 
 # Compact problem browser
 def show_problem_browser(system):
-    """Mobile-friendly problem browser"""
+    """Mobile-friendly problem browser with improved horizontal card layout and icons."""
     st.markdown("""
     <div class="main-header">
         <h1>📚 Problem Browser</h1>
         <p class="mobile-text">Browse and filter all problems</p>
     </div>
     """, unsafe_allow_html=True)
-    
-    # Compact filters
+
+    # Filters
     col1, col2 = st.columns(2)
     with col1:
         difficulty_filter = st.selectbox("Difficulty", ["All", "Easy", "Medium", "Hard"], key="browser_difficulty")
     with col2:
         status_filter = st.selectbox("Status", ["All", "Not Started", "Completed", "Skipped"], key="browser_status")
-    
-    pattern_filter = st.selectbox("Pattern", ["All"] + system.get_learning_order_patterns(), key="browser_pattern")
-    
+    pattern_filter = st.selectbox("Pattern", ["All"] + system.get_learning_order(), key="browser_pattern")
+
     # Filter problems
     filtered_problems = system.neetcode
     if difficulty_filter != "All":
@@ -1016,186 +1025,103 @@ def show_problem_browser(system):
         filtered_problems = [p for p in filtered_problems if (str(p.get("status", "")).strip().lower() in [s for s in target_statuses if s is not None]) or (p.get("status") is None and None in target_statuses)]
     if pattern_filter != "All":
         filtered_problems = [p for p in filtered_problems if str(p.get("pattern", "")).strip() == pattern_filter]
-    
-    # Compact problem list
+
+    # Load progress for note and solved status
+    progress = system.progress.get("problems", {})
+
     st.subheader(f"📋 Problems ({len(filtered_problems)})")
     for problem in filtered_problems:
         status = str(problem.get("status", "")).lower()
         status_emoji = {"completed": "✅", "skipped": "⏭️", "": "⏳"}.get(status, "⏳")
-        
-        # Use helper function to get LeetCode URL
+        note_icon = "📝" if progress.get(problem["id"], {}).get("note_path") else ""
+        solved = progress.get(problem["id"], {}).get("solved", False) or status == "completed"
+        solved_text = "Solved" if solved else "Not Solved"
+        solved_color = "#4CAF50" if solved else "#B0B0B0"
         leetcode_url = get_leetcode_url(problem)
-        
-        st.markdown(f"""
-        <div class="problem-card">
-            {status_emoji} <strong style='font-size:1.05rem'>{problem['id']} - {problem['title']}</strong><br>
-            <small>{problem['difficulty']} • {problem['pattern']}</small><br>
-            <a href="{leetcode_url}" target="_blank">🔗 Solve on LeetCode</a>
-        </div>
-        """, unsafe_allow_html=True)
 
-# Compact review interface
+        st.markdown(f'''
+        <div style="display: flex; align-items: center; border: 1px solid #383850; border-radius: 10px; padding: 0.7rem 1rem; margin-bottom: 0.5rem; background: #1E1E2F;">
+            <span style="font-size: 1.5rem; margin-right: 1rem;">{status_emoji}</span>
+            <div style="flex: 1;">
+                <span style="font-weight: 600; font-size: 1.08rem;">{problem['id']} - {problem['title']}</span><br>
+                <span style="font-size: 0.95rem; color: #B0B0B0;">{problem['difficulty']} • {problem['pattern']}</span>
+            </div>
+            <div style="margin-right: 1.2rem; color: {solved_color}; font-weight: 500;">{solved_text}</div>
+            <div style="font-size: 1.2rem; margin-right: 1.2rem;">{note_icon}</div>
+            <a href="{leetcode_url}" target="_blank" style="font-size: 1.3rem; text-decoration: none;">🔗</a>
+        </div>
+        ''', unsafe_allow_html=True)
+
+# Remove the review interface
 def show_review_interface(system):
-    """Mobile-friendly review interface"""
-    st.markdown("""
-    <div class="main-header">
-        <h1>📖 Review Notes</h1>
-        <p class="mobile-text">Review your notes and flashcards</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Pattern selector
-    all_patterns = system.get_learning_order_patterns()
-    selected_pattern = st.selectbox("Pattern", all_patterns, 
-                                   index=all_patterns.index(st.session_state.selected_pattern) if st.session_state.selected_pattern in all_patterns else 0, 
-                                   key="review_pattern_select")
-    st.session_state.selected_pattern = selected_pattern
-    
-    # Solved problems
-    solved_problems = [p for p in system.get_problems_by_pattern(selected_pattern) if str(p.get("status", "")).lower() == "completed"]
-    
-    if not solved_problems:
-        st.info("No solved problems in this pattern yet.")
-        return
-    
-    # Problem selector
-    problem_titles = [f"{p['id']} - {p['title']}" for p in solved_problems]
-    selected_idx = st.selectbox("Select problem", list(range(len(problem_titles))), 
-                               format_func=lambda i: problem_titles[i], key="review_problem_select")
-    problem = solved_problems[selected_idx]
-    
-    # Show note
-    note_path = f"{OBSIDIAN_VAULT}/Problems/{problem['id']} - {problem['title']}.md"
-    note_md = None
-    if os.path.exists(note_path):
-        with open(note_path, "r", encoding="utf-8") as f:
-            note_md = f.read()
-    
-    if note_md:
-        with st.expander(f"📝 Note for {problem['id']}", expanded=True):
-            st.markdown(note_md, unsafe_allow_html=True)
-    else:
-        st.warning("No note available for this problem")
-    
-    # Flashcards
-    progress = system.progress.get("problems", {}).get(problem["id"], {})
-    flashcards = progress.get("analysis", {}).get("flashcards", [])
-    
-    if flashcards:
-        with st.expander("🃏 Flashcards", expanded=False):
-            for i, card in enumerate(flashcards, 1):
-                st.markdown(f"**{i}.** {card}")
+    pass
 
 def show_study_mode(system):
-    """Study Mode: Review all notes from Google Drive or GitHub, with sorting/filtering/search"""
+    """Study Mode: Show all notes from GitHub/Obsidian, grouped by pattern, with search and expand/collapse."""
     import os
-    import glob
-    import re
-    import base64
     import requests
     from pathlib import Path
     import streamlit as st
 
     st.markdown("""
     <div class="main-header">
-        <h1>📚 Study Mode</h1>
-        <p class="mobile-text">Review, search, and study all your notes</p>
+        <h1>📚 Study Session</h1>
+        <p class="mobile-text">Browse and study all your notes, grouped by pattern</p>
     </div>
     """, unsafe_allow_html=True)
 
-    # --- Load notes from Google Drive (preferred) or GitHub (fallback) ---
     notes = []
     note_source = ""
-    # Try Google Drive first
-    gdrive_folder = os.environ.get('GDRIVE_FOLDER_ID')
-    gdrive_creds = os.environ.get('GDRIVE_CREDENTIALS')
-    if gdrive_folder and gdrive_creds:
-        try:
-            from cloud_sync import CloudSync
-            cloud_sync = CloudSync()
-            notes = cloud_sync.list_notes_from_gdrive()
-            note_source = "Google Drive"
-        except Exception as e:
-            st.warning(f"Google Drive load failed: {e}")
-    # Fallback to local folder
-    if not notes:
-        local_notes = Path("local_notes")
-        if local_notes.exists():
-            for note_file in local_notes.rglob("*.md"):
-                with open(note_file, "r", encoding="utf-8") as f:
-                    notes.append({
-                        "title": note_file.stem,
-                        "content": f.read(),
-                        "pattern": note_file.parent.name,
-                        "path": str(note_file)
-                    })
-            note_source = "Local Folder"
-    # Fallback to GitHub
-    if not notes and os.environ.get('GITHUB_TOKEN') and os.environ.get('GITHUB_REPO'):
+    # Fetch notes from GitHub
+    if os.environ.get('GITHUB_TOKEN') and os.environ.get('GITHUB_REPO'):
         try:
             headers = {"Authorization": f"token {os.environ['GITHUB_TOKEN']}", "Accept": "application/vnd.github.v3+json"}
             repo = os.environ['GITHUB_REPO']
             api_url = f"https://api.github.com/repos/{repo}/contents/notes"
             r = requests.get(api_url, headers=headers)
             if r.status_code == 200:
-                for file_info in r.json():
-                    if file_info['name'].endswith('.md'):
-                        file_url = file_info['download_url']
-                        note_content = requests.get(file_url).text
-                        notes.append({
-                            "title": file_info['name'].replace('.md',''),
-                            "content": note_content,
-                            "pattern": file_info.get('path','').split('/')[-2] if '/' in file_info.get('path','') else '',
-                            "path": file_info['path']
-                        })
+                patterns = r.json()
+                for pattern in patterns:
+                    if pattern['type'] == 'dir':
+                        pattern_name = pattern['name']
+                        pattern_url = f"https://api.github.com/repos/{repo}/contents/notes/{pattern_name}"
+                        r2 = requests.get(pattern_url, headers=headers)
+                        if r2.status_code == 200:
+                            files = r2.json()
+                            for file in files:
+                                if file['name'].endswith('.md'):
+                                    file_r = requests.get(file['download_url'], headers=headers)
+                                    if file_r.status_code == 200:
+                                        notes.append({
+                                            "title": file['name'].replace('.md',''),
+                                            "content": file_r.text,
+                                            "pattern": pattern_name,
+                                            "path": file['path']
+                                        })
                 note_source = "GitHub"
+            else:
+                st.warning(f"Failed to fetch notes from GitHub: {r.status_code}")
         except Exception as e:
             st.warning(f"GitHub load failed: {e}")
+    else:
+        st.info("GitHub sync not configured. No notes to display.")
 
-    if not notes:
-        st.info("No notes found in Google Drive, local folder, or GitHub.")
-        return
+    # Group notes by pattern
+    from collections import defaultdict
+    pattern_groups = defaultdict(list)
+    for note in notes:
+        pattern_groups[note['pattern']].append(note)
 
-    # --- Sorting/filtering/search UI ---
-    patterns = sorted(set(n.get('pattern','') for n in notes if n.get('pattern','')))
-    pattern_filter = st.selectbox("Pattern", ["All"] + patterns, key="study_pattern")
-    search_query = st.text_input("Search notes by title or content", key="study_search")
-    sort_by = st.selectbox("Sort by", ["Title", "Pattern"], key="study_sort")
+    # Search bar
+    search_query = st.text_input("Search notes by title or content:")
 
-    filtered_notes = notes
-    if pattern_filter != "All":
-        filtered_notes = [n for n in filtered_notes if n.get('pattern','') == pattern_filter]
-    if search_query:
-        filtered_notes = [n for n in filtered_notes if search_query.lower() in n['title'].lower() or search_query.lower() in n['content'].lower()]
-    if sort_by == "Title":
-        filtered_notes = sorted(filtered_notes, key=lambda n: n['title'])
-    elif sort_by == "Pattern":
-        filtered_notes = sorted(filtered_notes, key=lambda n: n.get('pattern',''))
-
-    st.markdown(f"**Source:** {note_source} | **Total Notes:** {len(filtered_notes)}")
-
-    # --- Display notes ---
-    for note in filtered_notes:
-        with st.expander(f"📝 {note['title']} [{note.get('pattern','')}]", expanded=False):
-            st.markdown(note['content'], unsafe_allow_html=True)
-            col1, col2 = st.columns(2)
-            with col1:
-                b64 = base64.b64encode(note['content'].encode()).decode()
-                href = f'<a href="data:file/md;base64,{b64}" download="{note["title"].replace(" ", "_")}.md">📥 Download Note</a>'
-                st.markdown(href, unsafe_allow_html=True)
-            with col2:
-                if st.button(f"📚 Export to NotebookLM", key=f"notebooklm_export_{note['title']}"):
-                    try:
-                        from notebooklm_export import NotebookLMExporter
-                        exporter = NotebookLMExporter()
-                        notebooklm_content = exporter.parse_note_for_notebooklm(note['content'], note.get('pattern',''), f"{note['title']}.md")
-                        output_path = Path("notebooklm_export") / f"{note.get('pattern','')}_{note['title']}.md"
-                        output_path.parent.mkdir(exist_ok=True)
-                        with open(output_path, 'w', encoding='utf-8') as f:
-                            f.write(notebooklm_content)
-                        st.success(f"✅ Exported to NotebookLM: {output_path}")
-                    except Exception as e:
-                        st.error(f"NotebookLM export error: {e}")
+    # Display notes grouped by pattern
+    for pattern in sorted(pattern_groups.keys()):
+        st.markdown(f"### {pattern}")
+        for note in pattern_groups[pattern]:
+            if search_query.lower() in note['title'].lower() or search_query.lower() in note['content'].lower():
+                with st.expander(note['title'], expanded=False):
+                    st.markdown(note['content'])
 
 def show_floating_ai_chatbox():
     """Show a Cursor-style floating AI chatbox for DSA-related queries"""

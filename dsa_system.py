@@ -598,3 +598,11 @@ User's Java Solution (if any):
             self.progress["problems"][problem["id"]]["flashcards"] = flashcards
             self.progress["problems"][problem["id"]]["notebooklm_exported"] = result["notebooklm"]
         return result
+
+    def mark_problem_completed(self, problem_id):
+        """Mark a problem as completed and update progress."""
+        if problem_id in self.progress["problems"]:
+            self.progress["problems"][problem_id]["status"] = "completed"
+        else:
+            self.progress["problems"][problem_id] = {"status": "completed"}
+        self._save_progress()
