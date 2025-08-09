@@ -165,21 +165,28 @@ class CloudSync:
             # Encode content
             content = base64.b64encode(note_content.encode('utf-8')).decode('utf-8')
             
-            # Prepare data
+            # If file exists, include its SHA to update instead of create
+            sha = self._get_github_file_sha(url, headers)
+            commit_message = ("Update" if sha else "Add") + f" DSA note: {filename}"
             data = {
-                'message': f'Add DSA note: {filename}',
+                'message': commit_message,
                 'content': content,
                 'branch': 'main'
             }
+            if sha:
+                data['sha'] = sha
             
-            # Make request
             response = requests.put(url, headers=headers, json=data)
             
             if response.status_code in [200, 201]:
-                file_url = response.json()['content']['download_url']
+                # On update, the response may not include content
+                if isinstance(response.json(), dict) and response.json().get('content'):
+                    file_url = response.json()['content'].get('download_url') or response.json()['content'].get('html_url')
+                else:
+                    file_url = f"https://github.com/{self.github_repo}/blob/main/{file_path}"
                 return True, f"✅ Uploaded to GitHub: {file_url}"
             else:
-                return False, f"GitHub upload failed: {response.status_code}"
+                return False, f"GitHub upload failed: {response.status_code} - {response.text}"
                 
         except Exception as e:
             return False, f"GitHub upload error: {str(e)}"
@@ -223,21 +230,26 @@ class CloudSync:
             # Encode content
             content = base64.b64encode(csv_content.encode('utf-8')).decode('utf-8')
             
-            # Prepare data
+            sha = self._get_github_file_sha(url, headers)
+            commit_message = ("Update" if sha else "Add") + f" DSA flashcards: {filename}"
             data = {
-                'message': f'Add DSA flashcards: {filename}',
+                'message': commit_message,
                 'content': content,
                 'branch': 'main'
             }
+            if sha:
+                data['sha'] = sha
             
-            # Make request
             response = requests.put(url, headers=headers, json=data)
             
             if response.status_code in [200, 201]:
-                file_url = response.json()['content']['download_url']
+                if isinstance(response.json(), dict) and response.json().get('content'):
+                    file_url = response.json()['content'].get('download_url') or response.json()['content'].get('html_url')
+                else:
+                    file_url = f"https://github.com/{self.github_repo}/blob/main/{file_path}"
                 return True, f"✅ Flashcards uploaded to GitHub: {file_url}"
             else:
-                return False, f"GitHub upload failed: {response.status_code}"
+                return False, f"GitHub upload failed: {response.status_code} - {response.text}"
                 
         except Exception as e:
             return False, f"GitHub upload error: {str(e)}"
@@ -265,10 +277,10 @@ class CloudSync:
         return True, "Google Drive upload configured successfully"
     
     # Existing sync methods
-    def sync_note_to_cloud(self, note_content, filename):
+    def sync_note_to_cloud(self, note_content, filename, pattern="Arrays"):
         """Sync note to cloud storage"""
         # Try GitHub first
-        success, message = self.upload_note_to_github(note_content, filename)
+        success, message = self.upload_note_to_github(note_content, filename, pattern)
         if success:
             return True
         
@@ -297,6 +309,87 @@ class CloudSync:
             }
         }
         return status
+
+    # --- GitHub helpers and fetchers ---
+    def _get_github_file_sha(self, url: str, headers: dict):
+        """Return the SHA of an existing GitHub file, or None if it doesn't exist."""
+        try:
+            resp = requests.get(url, headers=headers)
+            if resp.status_code == 200 and isinstance(resp.json(), dict):
+                return resp.json().get('sha')
+        except Exception:
+            pass
+        return None
+
+    def fetch_notes_from_github(self):
+        """Fetch all notes from GitHub repository structured under notes/<pattern>/*.md"""
+        if not self.github_token or not self.github_repo:
+            return []
+        try:
+            base_url = f"https://api.github.com/repos/{self.github_repo}/contents/notes"
+            headers = {
+                'Authorization': f'token {self.github_token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+            top = requests.get(base_url, headers=headers)
+            if top.status_code != 200:
+                return []
+            notes = []
+            for item in top.json():
+                if item.get('type') == 'dir':
+                    pattern_name = item['name']
+                    pattern_url = f"{base_url}/{pattern_name}"
+                    pattern_resp = requests.get(pattern_url, headers=headers)
+                    if pattern_resp.status_code == 200:
+                        for file_item in pattern_resp.json():
+                            if file_item['name'].endswith('.md'):
+                                content_resp = requests.get(file_item['download_url'])
+                                if content_resp.status_code == 200:
+                                    notes.append({
+                                        'pattern': pattern_name,
+                                        'filename': file_item['name'],
+                                        'content': content_resp.text,
+                                        'url': file_item['download_url']
+                                    })
+            return notes
+        except Exception as e:
+            print(f"Error fetching notes from GitHub: {e}")
+            return []
+
+    def fetch_flashcards_from_github(self):
+        """Fetch all flashcards from GitHub repository structured under flashcards/<pattern>/*.csv"""
+        if not self.github_token or not self.github_repo:
+            return []
+        try:
+            base_url = f"https://api.github.com/repos/{self.github_repo}/contents/flashcards"
+            headers = {
+                'Authorization': f'token {self.github_token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+            top = requests.get(base_url, headers=headers)
+            if top.status_code != 200:
+                return []
+            flashcards = []
+            for item in top.json():
+                if item.get('type') == 'dir':
+                    pattern_name = item['name']
+                    pattern_url = f"{base_url}/{pattern_name}"
+                    pattern_resp = requests.get(pattern_url, headers=headers)
+                    if pattern_resp.status_code == 200:
+                        for file_item in pattern_resp.json():
+                            if file_item['name'].endswith('.csv'):
+                                content_resp = requests.get(file_item['download_url'])
+                                if content_resp.status_code == 200:
+                                    flashcards.append({
+                                        'pattern': pattern_name,
+                                        'filename': file_item['name'],
+                                        'content': content_resp.text,
+                                        'url': file_item['download_url']
+                                    })
+            return flashcards
+        except Exception as e:
+            print(f"Error fetching flashcards from GitHub: {e}")
+            return []
 
 def main():
     """Main cloud sync setup"""

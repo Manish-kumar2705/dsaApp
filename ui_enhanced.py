@@ -875,7 +875,9 @@ def show_solve_interface():
                             # --- GitHub Sync ---
                             cloud_sync = CloudSync()
                             github_filename = f"{problem['id']}_{title}.md"
-                            github_success = cloud_sync.sync_note_to_cloud(edited_notes, github_filename)
+                            # Use proper pattern folder casing consistent with repo (remove spaces)
+                            github_pattern = problem['pattern'].replace(' ', '_') if problem.get('pattern') else 'Misc'
+                            github_success = cloud_sync.sync_note_to_cloud(edited_notes, github_filename, pattern=github_pattern)
                             if github_success:
                                 st.success("Notes pushed to GitHub vault!")
                             else:
@@ -890,10 +892,16 @@ def show_solve_interface():
                             exporter.export_note_to_notebooklm(notes_path)
                             st.success("Note exported to NotebookLM!")
 
+                            # Optional: also push NotebookLM export files to GitHub for phone access
+                            if os.getenv('GITHUB_TOKEN') and os.getenv('GITHUB_REPO'):
+                                pushed = exporter.upload_export_to_github()
+                                if pushed:
+                                    st.success("NotebookLM export mirrored to GitHub (notebooklm_export/)")
+
                             # Generate Anki flashcards
-                            from anki_manager import create_flashcards_from_notes
+                            from anki_manager import create_flashcards
                             flashcards = extract_flashcards_from_notes(edited_notes)  # Assume helper function
-                            create_flashcards(flashcards, deck_name=problem['pattern'])
+                            create_flashcards(flashcards, problem_title=problem['title'])
                             st.success("✅ Flashcards generated and ready for Anki")
                         except Exception as e:
                             st.error(f"Failed to save/sync: {e}")
@@ -934,10 +942,27 @@ def show_solve_interface():
                         st.error(f"Failed to analyze code: {e}")
             with b_col3:
                 if st.button("Generate AI Solution", use_container_width=True):
-                    prompt = f"Generate optimal {selected_language} solution code for LeetCode problem: {problem['title']}"
+                    # Build a precise prompt that asks for code only
+                    code_prompt = f"""
+You are a DSA expert. Write ONLY the complete {selected_language} solution code for the LeetCode problem "{problem['title']}".
+- Output must be a single fenced code block marked as {selected_language}.
+- Do not include explanations or extra text outside the code block.
+"""
                     try:
-                        ai_code = call_ai_api(prompt)
-                        st.session_state.code_editor_value = ai_code
+                        # Warn if API keys are missing (will likely use fallback)
+                        try:
+                            from config import GROQ_API_KEY, OPENROUTER_API_KEY
+                            if not (GROQ_API_KEY or OPENROUTER_API_KEY):
+                                st.warning("AI keys not configured. Set GROQ_API_KEY or OPENROUTER_API_KEY in .env for real solutions.")
+                        except Exception:
+                            pass
+
+                        ai_response = call_ai_api(code_prompt)
+                        code_only = extract_code_block_from_response(ai_response, selected_language)
+                        if not code_only or "AI-powered" in code_only or "API key" in code_only:
+                            # Fallback to a clean language template so the editor is populated with runnable code
+                            code_only = get_language_template(selected_language)
+                        st.session_state.code_editor_value = code_only
                         st.rerun()
                     except Exception as e:
                         st.error(f"Failed to generate AI solution: {e}")
@@ -1596,6 +1621,26 @@ def extract_flashcards_from_notes(notes):
     # Simple extraction logic (e.g., look for Q&A patterns)
     # Implement based on notes structure
     return []  # Placeholder
+
+def extract_code_block_from_response(response_text: str, language: str):
+    """Return the first fenced code block for the language; fallback to raw text if none."""
+    if not response_text:
+        return ""
+    fence = f"```{language}"
+    start = response_text.find(fence)
+    if start != -1:
+        start += len(fence)
+        end = response_text.find("```", start)
+        if end != -1:
+            return response_text[start:end].strip()
+    # Try any fenced block
+    any_start = response_text.find("```")
+    if any_start != -1:
+        any_start += 3
+        any_end = response_text.find("```", any_start)
+        if any_end != -1:
+            return response_text[any_start:any_end].strip()
+    return response_text.strip()
 
 def load_random_flashcards():
     # Load from Anki or saved files

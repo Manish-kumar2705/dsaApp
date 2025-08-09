@@ -648,6 +648,47 @@ if __name__ == '__main__':
         
         print(f"🎉 NotebookLM export complete! Files saved to: {self.notebooklm_folder}")
         return True
+
+    def export_note_to_notebooklm(self, local_note_path):
+        """Export a single local note file to NotebookLM folder, inferring pattern and filename."""
+        try:
+            local_path = Path(local_note_path)
+            if not local_path.exists():
+                raise FileNotFoundError(f"Note not found: {local_note_path}")
+            # Infer pattern from parent dir if within notes/<pattern>/filename.md
+            pattern = local_path.parent.name
+            filename = local_path.name
+            content = local_path.read_text(encoding='utf-8')
+            notebooklm_content = self.parse_note_for_notebooklm(content, pattern, filename)
+            output_path = Path(self.notebooklm_folder) / f"{pattern}_{filename}"
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(notebooklm_content)
+            print(f"✅ Exported single note to NotebookLM: {output_path}")
+            return True
+        except Exception as e:
+            print(f"Single-note export failed: {e}")
+            return False
+
+    def upload_export_to_github(self):
+        """Upload the entire notebooklm_export folder to GitHub under notebooklm_export/ for mobile access."""
+        try:
+            from cloud_sync import CloudSync
+            sync = CloudSync()
+            export_root = Path(self.notebooklm_folder)
+            if not export_root.exists():
+                return False
+            uploaded = 0
+            for file_path in export_root.rglob('*.md'):
+                rel = file_path.relative_to(export_root)
+                target = f"notebooklm_export/{rel.as_posix()}"
+                ok, _ = sync.upload_content_to_github(file_path.read_text(encoding='utf-8'), target, commit_message=f"NotebookLM export: {rel}")
+                if ok:
+                    uploaded += 1
+            print(f"✅ Uploaded {uploaded} NotebookLM export files to GitHub")
+            return uploaded > 0
+        except Exception as e:
+            print(f"Upload export to GitHub error: {e}")
+            return False
     
     def create_index_file(self):
         """Create an index file for easy navigation"""
